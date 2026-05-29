@@ -1,33 +1,56 @@
----
-esphome:
-  name: clock
-  friendly_name: Clock
-  on_boot:
-    then:
-      - pcf8563.read_time:
-      - light.turn_on: display_backlight
-      - script.execute: update_minutes_hand
-  platformio_options:
-    board_build.flash_mode: dio
+substitutions:
+  alarm_audio_player_entity: media_player.example_speaker
+  alarm_audio_start_action: script.alarmv1_start_alarm_audio
+  alarm_audio_stop_action: media_player.media_stop
+  morning_briefing_action: script.alarmv1_morning_briefing
+  morning_briefing_player_entity: media_player.example_speaker
+  home_lights_off_action: light.turn_off
+  home_lights_off_entity: all
+  timezone: Etc/UTC
 
-packages:
-  core: !include debug.yaml
+esphome:
+  name: esphome-web-56058c
+  friendly_name: AlarmV1
+  min_version: 2025.11.0
+  name_add_mac_suffix: false
+  on_boot:
+    priority: -10
+    then:
+      - lambda: |-
+          ESP_LOGI("boot", "boot step 1: on_boot started");
+      - output.set_max_power:
+          id: buzzer
+          max_power: 100%
+      - lambda: |-
+          ESP_LOGI("boot", "boot step 2: buzzer max power applied");
+      - delay: 2s
+      - lambda: |-
+          ESP_LOGI("boot", "boot step 3: startup delay complete");
+      - script.execute: reset_idle_timer
+      - lambda: |-
+          ESP_LOGI("boot", "boot step 4: reset_idle_timer executed");
+      - script.execute: update_minutes_hand
+      - lambda: |-
+          ESP_LOGI("boot", "boot step 5: update_minutes_hand executed");
+      - delay: 3s
+      - safe_mode.mark_successful
+      - lambda: |-
+          ESP_LOGI("boot", "boot step 6: marked boot successful");
 
 esp32:
   variant: esp32s3
   framework:
     type: esp-idf
 
+safe_mode:
+  boot_is_good_after: 5s
+
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-  ap:
-    ssid: "Clock Fallback Hotspot"
-    password: !secret wifi_password
-
-
-captive_portal:
+preferences:
+  flash_write_interval: 10s
 
 api:
   reboot_timeout: 0s
@@ -36,7 +59,6 @@ web_server:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
 
 logger:
 
@@ -54,12 +76,171 @@ output:
   - platform: ledc
     pin: GPIO3
     id: buzzer
+    frequency: 2000 Hz
   - platform: ledc
     pin: GPIO9
     id: backlight_output
 
-rtttl:
-  output: buzzer
+globals:
+  - id: alarm_enabled
+    type: bool
+    restore_value: yes
+    initial_value: "true"
+  - id: alarm_ringing
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: skip_next_ring
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+  - id: skip_next_ring_epoch
+    type: uint32_t
+    restore_value: yes
+    initial_value: "0"
+  - id: last_alarm_minute_key
+    type: int
+    restore_value: no
+    initial_value: "-1"
+  - id: last_alarm_debug_minute_key
+    type: int
+    restore_value: no
+    initial_value: "-1"
+  - id: last_ui_minute_key
+    type: int
+    restore_value: no
+    initial_value: "-1"
+  - id: snooze_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: snooze_minutes
+    type: int
+    restore_value: yes
+    initial_value: "10"
+  - id: snooze_day_of_year
+    type: int
+    restore_value: no
+    initial_value: "-1"
+  - id: snooze_hour
+    type: int
+    restore_value: no
+    initial_value: "-1"
+  - id: snooze_minute
+    type: int
+    restore_value: no
+    initial_value: "-1"
+  - id: last_encoder_turn_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: last_encoder_direction
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: alarm_flash_on
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: last_interaction_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: last_touch_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: screen_dimmed
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: ring_controls_visible
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: home_menu_visible
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: media_screen_visible
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: media_volume_level
+    type: float
+    restore_value: no
+    initial_value: "0.5"
+  - id: media_volume_overlay_until_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: dismiss_feedback_until_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: morning_music_prompt_until_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: next_ring_override_active
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+  - id: next_ring_override_epoch
+    type: uint32_t
+    restore_value: yes
+    initial_value: "0"
+  - id: next_alarm_available
+    type: bool
+    restore_value: no
+    initial_value: "false"
+  - id: next_alarm_epoch
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+
+switch:
+  - platform: template
+    id: alarm_enabled_switch
+    name: "Alarm Enabled"
+    icon: "mdi:alarm-check"
+    restore_mode: RESTORE_DEFAULT_ON
+    lambda: |-
+      return id(alarm_enabled);
+    turn_on_action:
+      - lambda: |-
+          id(alarm_enabled) = true;
+          ESP_LOGI("alarm", "Alarm enabled");
+      - script.execute: update_minutes_hand
+      - script.execute: reset_idle_timer
+    turn_off_action:
+      - lambda: |-
+          id(alarm_enabled) = false;
+          id(skip_next_ring) = false;
+          id(skip_next_ring_epoch) = 0;
+          id(next_ring_override_active) = false;
+          id(next_ring_override_epoch) = 0;
+          ESP_LOGI("alarm", "Alarm disabled / away mode enabled");
+      - script.execute: clear_snooze
+      - script.execute: stop_alarm
+      - script.execute: update_minutes_hand
+      - script.execute: reset_idle_timer
+
+button:
+  - platform: template
+    name: "Stop Alarm"
+    icon: "mdi:alarm-off"
+    on_press:
+      - script.execute: dismiss_alarm
+      - script.execute: reset_idle_timer
+  - platform: template
+    name: "Test Alarm"
+    icon: "mdi:alarm-light"
+    on_press:
+      - logger.log: "Manual test alarm requested"
+      - script.execute: clear_snooze
+      - script.execute: start_alarm
+      - script.execute: reset_idle_timer
 
 sensor:
   - platform: rotary_encoder
@@ -67,73 +248,332 @@ sensor:
     pin_a: GPIO40
     pin_b: GPIO41
     on_clockwise:
+      - script.execute: reset_idle_timer
       - lambda: |-
-          auto alarm_time_var = id(alarm_time).state_as_esptime();
-          alarm_time_var.minute += 15;
-          if (alarm_time_var.minute >= 60) {
-            alarm_time_var.minute -= 60;
-            alarm_time_var.hour = (alarm_time_var.hour + 1) % 24;
+          const int direction = 1;
+          const uint32_t now_ms = millis();
+          uint32_t delta_ms = now_ms - id(last_encoder_turn_ms);
+          if (id(last_encoder_direction) != direction) {
+            delta_ms = 1000;
           }
-          id(alarm_time).make_call().set_time(alarm_time_var).perform();
+          id(last_encoder_turn_ms) = now_ms;
+          id(last_encoder_direction) = direction;
+
+          int step_minutes = 1;
+          if (delta_ms < 70) {
+            step_minutes = 15;
+          } else if (delta_ms < 140) {
+            step_minutes = 5;
+          }
+
+          if (id(media_screen_visible)) {
+            id(media_volume_level) += 0.05f;
+            if (id(media_volume_level) > 1.0f) {
+              id(media_volume_level) = 1.0f;
+            }
+            ESP_LOGI("media", "Volume adjusted clockwise to %.0f%%", id(media_volume_level) * 100.0f);
+            id(show_media_volume_overlay).execute();
+            id(set_morning_music_volume_on_ha).execute();
+            return;
+          }
+
+          if (id(alarm_ringing)) {
+            id(snooze_minutes) += step_minutes;
+            if (id(snooze_minutes) > 60) {
+              id(snooze_minutes) = 60;
+            }
+            ESP_LOGI("alarm", "Snooze duration set to %d minutes (delta=%ums, step=%d)", id(snooze_minutes), delta_ms, step_minutes);
+            id(update_alarm_status_ui).execute();
+            return;
+          }
+
+          if (id(snooze_active)) {
+            ESP_LOGI("alarm", "Ignoring clockwise encoder turn while alarm is snoozed");
+            return;
+          }
+
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) {
+            now = id(rtctime).now();
+          }
+          if (!now.is_valid() || !id(next_alarm_available)) {
+            ESP_LOGW("alarm", "Ignoring clockwise encoder turn because next ring is unavailable");
+            return;
+          }
+          uint32_t candidate_epoch = id(next_alarm_epoch) + (step_minutes * 60);
+          const uint32_t min_epoch = ((uint32_t(now.timestamp) / 60) + 1) * 60;
+          if (candidate_epoch < min_epoch) {
+            candidate_epoch = min_epoch;
+          }
+          id(next_ring_override_active) = true;
+          id(next_ring_override_epoch) = candidate_epoch;
+          id(update_minutes_hand).execute();
+          auto next_alarm = ESPTime::from_epoch_local(candidate_epoch);
+          ESP_LOGI("alarm", "Next ring override adjusted clockwise by %d minutes to %02d:%02d", step_minutes, next_alarm.hour, next_alarm.minute);
     on_anticlockwise:
+      - script.execute: reset_idle_timer
       - lambda: |-
-          auto alarm_time_var = id(alarm_time).state_as_esptime();
-          if (alarm_time_var.minute < 15) {
-            alarm_time_var.minute += 60;
-            alarm_time_var.hour = (alarm_time_var.hour + 23) % 24;
+          const int direction = -1;
+          const uint32_t now_ms = millis();
+          uint32_t delta_ms = now_ms - id(last_encoder_turn_ms);
+          if (id(last_encoder_direction) != direction) {
+            delta_ms = 1000;
           }
-          alarm_time_var.minute -= 15;
-          id(alarm_time).make_call().set_time(alarm_time_var).perform();
+          id(last_encoder_turn_ms) = now_ms;
+          id(last_encoder_direction) = direction;
+
+          int step_minutes = 1;
+          if (delta_ms < 70) {
+            step_minutes = 15;
+          } else if (delta_ms < 140) {
+            step_minutes = 5;
+          }
+
+          if (id(media_screen_visible)) {
+            id(media_volume_level) -= 0.05f;
+            if (id(media_volume_level) < 0.0f) {
+              id(media_volume_level) = 0.0f;
+            }
+            ESP_LOGI("media", "Volume adjusted anticlockwise to %.0f%%", id(media_volume_level) * 100.0f);
+            id(show_media_volume_overlay).execute();
+            id(set_morning_music_volume_on_ha).execute();
+            return;
+          }
+
+          if (id(alarm_ringing)) {
+            id(snooze_minutes) -= step_minutes;
+            if (id(snooze_minutes) < 5) {
+              id(snooze_minutes) = 5;
+            }
+            ESP_LOGI("alarm", "Snooze duration set to %d minutes (delta=%ums, step=%d)", id(snooze_minutes), delta_ms, step_minutes);
+            id(update_alarm_status_ui).execute();
+            return;
+          }
+
+          if (id(snooze_active)) {
+            ESP_LOGI("alarm", "Ignoring anticlockwise encoder turn while alarm is snoozed");
+            return;
+          }
+
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) {
+            now = id(rtctime).now();
+          }
+          if (!now.is_valid() || !id(next_alarm_available)) {
+            ESP_LOGW("alarm", "Ignoring anticlockwise encoder turn because next ring is unavailable");
+            return;
+          }
+          int32_t candidate_epoch = int32_t(id(next_alarm_epoch)) - (step_minutes * 60);
+          const uint32_t min_epoch = ((uint32_t(now.timestamp) / 60) + 1) * 60;
+          if (candidate_epoch < int32_t(min_epoch)) {
+            candidate_epoch = int32_t(min_epoch);
+          }
+          id(next_ring_override_active) = true;
+          id(next_ring_override_epoch) = uint32_t(candidate_epoch);
+          id(update_minutes_hand).execute();
+          auto next_alarm = ESPTime::from_epoch_local(uint32_t(candidate_epoch));
+          ESP_LOGI("alarm", "Next ring override adjusted anticlockwise by %d minutes to %02d:%02d", step_minutes, next_alarm.hour, next_alarm.minute);
+
+  - platform: homeassistant
+    id: media_player_volume
+    entity_id: ${morning_briefing_player_entity}
+    attribute: volume_level
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            if (!isnan(x)) {
+              id(media_volume_level) = x;
+            }
+        - script.execute: update_media_screen_ui
 
 time:
   - platform: pcf8563
     id: rtctime
     i2c_id: internal_i2c
     address: 0x51
-    on_time:
-      - minutes: "*"
-        then:
-          - script.execute: update_minutes_hand
+    update_interval: never
 
   - platform: sntp
     id: sntp_time
-    timezone: Europe/London
+    timezone: ${timezone}
     servers:
-     - 0.pool.ntp.org
-     - 1.pool.ntp.org
-     - 2.pool.ntp.org
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
     on_time_sync:
       then:
+        - logger.log: "SNTP time sync received, writing time back to RTC"
         - pcf8563.write_time:
         - script.execute: update_minutes_hand
+        - script.execute: sync_alarm_day_state
 
 datetime:
   - platform: template
-    id: alarm_time
-    name: "Alarm Time"
+    id: weekday_alarm_time
+    name: "Weekday Alarm Time"
     type: time
-    icon: "mdi:alarm"
+    icon: "mdi:calendar-week"
     initial_value: "07:00:00"
     restore_value: true
     optimistic: yes
     on_value:
       then:
         - script.execute: update_minutes_hand
+  - platform: template
+    id: weekend_alarm_time
+    name: "Weekend Alarm Time"
+    type: time
+    icon: "mdi:calendar-weekend"
+    initial_value: "09:00:00"
+    restore_value: true
+    optimistic: yes
+    on_value:
+      then:
+        - script.execute: update_minutes_hand
+text_sensor:
+  - platform: homeassistant
+    id: media_player_state
+    entity_id: ${morning_briefing_player_entity}
+    internal: true
+    on_value:
+      then:
+        - script.execute: update_media_screen_ui
+  - platform: homeassistant
+    id: media_track_title
+    entity_id: ${morning_briefing_player_entity}
+    attribute: media_title
+    internal: true
+    on_value:
+      then:
+        - script.execute: update_media_screen_ui
+  - platform: homeassistant
+    id: media_track_artist
+    entity_id: ${morning_briefing_player_entity}
+    attribute: media_artist
+    internal: true
+    on_value:
+      then:
+        - script.execute: update_media_screen_ui
+  - platform: homeassistant
+    id: media_track_album
+    entity_id: ${morning_briefing_player_entity}
+    attribute: media_album_name
+    internal: true
+    on_value:
+      then:
+        - script.execute: update_media_screen_ui
+  - platform: template
+    id: next_alarm_time_text
+    name: "Next Alarm Time"
+    icon: "mdi:calendar-clock"
+    device_class: timestamp
+    update_interval: 30s
+    lambda: |-
+      auto now = id(sntp_time).now();
+      if (!now.is_valid()) {
+        now = id(rtctime).now();
+      }
+      if (!now.is_valid()) {
+        return {""};
+      }
+      if (!id(alarm_enabled)) {
+        return {""};
+      }
+      if (!id(next_alarm_available)) {
+        return {""};
+      }
+
+      time_t candidate_epoch = id(next_alarm_epoch);
+      auto local = ESPTime::from_epoch_local(candidate_epoch);
+      char base_buf[32];
+      local.strftime(base_buf, sizeof(base_buf), "%Y-%m-%dT%H:%M:%S");
+      int32_t tz_offset = ESPTime::timezone_offset();
+      char sign = '+';
+      if (tz_offset < 0) {
+        sign = '-';
+        tz_offset = -tz_offset;
+      }
+      int tz_hours = tz_offset / 3600;
+      int tz_minutes = (tz_offset % 3600) / 60;
+      char out_buf[40];
+      snprintf(out_buf, sizeof(out_buf), "%s%c%02d:%02d", base_buf, sign, tz_hours, tz_minutes);
+      return {out_buf};
 
 binary_sensor:
   - platform: gpio
     name: Button
     id: front_button
-    pin: GPIO42
-
-  - platform: gpio
-    name: Hold Button
-    pin: GPIO46
+    pin:
+      number: GPIO42
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+    on_multi_click:
+      - timing:
+          - ON for at least 3s
+          - OFF for at least 50ms
+        then:
+          - if:
+              condition:
+                lambda: "return id(alarm_ringing) || id(snooze_active);"
+              then:
+                - script.execute: dismiss_alarm
+              else:
+                - script.execute: home_all_lights_off
+                - script.execute: close_home_menu
+          - script.execute: reset_idle_timer
+      - timing:
+          - ON for at most 500ms
+          - OFF for at least 50ms
+        then:
+          - if:
+              condition:
+                lambda: "return id(alarm_ringing);"
+              then:
+                - script.execute: snooze_alarm_five_minutes
+              else:
+                - if:
+                    condition:
+                      lambda: "return !id(media_screen_visible);"
+                    then:
+                      - if:
+                          condition:
+                            lambda: "return id(home_menu_visible);"
+                          then:
+                            - script.execute: close_home_menu
+                          else:
+                            - script.execute: open_home_menu
+          - script.execute: reset_idle_timer
 
 spi:
   id: spi_bus
   mosi_pin: GPIO5
   clk_pin: GPIO6
+
+touchscreen:
+  platform: ft5x06
+  id: dial_touchscreen
+  i2c_id: internal_i2c
+  address: 0x38
+  interrupt_pin: GPIO14
+  touch_timeout: 250ms
+  on_touch:
+    - if:
+        condition:
+          lambda: |-
+            const uint32_t now_ms = millis();
+            if (now_ms - id(last_touch_ms) < 700) {
+              return false;
+            }
+            id(last_touch_ms) = now_ms;
+            return true;
+        then:
+          - script.execute: reset_idle_timer
 
 light:
   - platform: monochromatic
@@ -143,19 +583,41 @@ light:
     default_transition_length: 0s
 
 display:
-  - platform: ili9xxx
+  - platform: mipi_spi
     id: round_display
     model: GC9A01A
     cs_pin: GPIO7
     reset_pin: GPIO8
     dc_pin: GPIO4
+    color_order: bgr
     invert_colors: true
     auto_clear_enabled: false
     update_interval: never
+    data_rate: 40MHz
+
+font:
+  - file: assets/DejaVuSans.ttf
+    id: media_text_font_14
+    size: 14
+    glyphs: &media_glyphs " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz[]_{}|~°▶Ⅱ■»♪АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя"
+  - file: assets/DejaVuSans.ttf
+    id: media_text_font_16
+    size: 16
+    glyphs: *media_glyphs
+  - file: assets/DejaVuSans.ttf
+    id: media_icon_font_28
+    size: 28
+    glyphs: "▶Ⅱ■»"
 
 lvgl:
+  rotation: 0
+  displays:
+    - round_display
+  touchscreens:
+    - touchscreen_id: dial_touchscreen
+      long_press_time: 700ms
   style_definitions:
-    - id: date_style      # choose an ID for your definition
+    - id: date_style
       text_font: montserrat_14
       align: center
       text_color: White
@@ -177,7 +639,7 @@ lvgl:
             pad_all: 0
             text_color: White
             scales:
-              - range_from: 0 # minutes scale
+              - range_from: 0
                 range_to: 60
                 angle_range: 360
                 rotation: 270
@@ -191,9 +653,9 @@ lvgl:
                       id: minute_hand
                       width: 2
                       color: White
-                      r_mod: -25
+                      length: 95
                       value: 0
-              - range_from: 1 # hours scale for labels
+              - range_from: 1
                 range_to: 12
                 angle_range: 330
                 rotation: 300
@@ -207,31 +669,35 @@ lvgl:
                     length: 10
                     color: White
                     label_gap: 12
-              - range_from: 0 # hi-res hours scale for hand
+              - range_from: 0
                 range_to: 720
                 angle_range: 360
                 rotation: 270
                 ticks:
-                  count: 0
+                  count: 2
+                  width: 1
+                  length: 1
+                  color: 0x000000
                 indicators:
                   - line:
                       id: hour_hand
                       width: 4
                       color: White
-                      r_mod: -40
+                      length: 80
                       value: 0
                   - line:
                       id: secs_hand
                       width: 1
                       color: Red
-                      r_mod: -15
+                      length: 105
                       value: 0
         - obj:
+            id: alarm_status_circle
             width: 120
             height: 120
             align: CENTER
             bg_color: Black
-            bg_opa: 85%
+            bg_opa: COVER
             radius: 60
             clip_corner: true
             pad_all: 0
@@ -240,52 +706,1240 @@ lvgl:
               - label:
                   styles: date_style
                   id: alarm_label
+                  width: 104
                   y: -20
+                  text_align: center
                   text: ""
               - label:
                   id: date_label
                   styles: date_style
+                  width: 104
                   y: 20
+                  text_align: center
                   text: ""
-                                
+        - button:
+            id: center_tap_button
+            width: 120
+            height: 120
+            align: CENTER
+            radius: 60
+            bg_opa: TRANSP
+            border_width: 0
+            shadow_width: 0
+            press_lock: true
+            on_short_click:
+              then:
+                - if:
+                    condition:
+                      lambda: "return !id(alarm_enabled) && !id(alarm_ringing) && !id(home_menu_visible) && !id(media_screen_visible);"
+                    then:
+                      - script.execute: enable_alarm
+                    else:
+                      - if:
+                          condition:
+                            lambda: "return !id(alarm_ringing) && !id(home_menu_visible) && !id(media_screen_visible);"
+                          then:
+                            - script.execute: toggle_skip_next_ring
+                - script.execute: reset_idle_timer
+            on_long_press:
+              then:
+                - if:
+                    condition:
+                      lambda: "return !id(alarm_ringing) && !id(home_menu_visible) && !id(media_screen_visible);"
+                    then:
+                      - script.execute: open_home_menu
+                - script.execute: reset_idle_timer
+        - label:
+            id: sleep_hint_label
+            hidden: true
+            align: CENTER
+            y: 68
+            text_font: montserrat_18
+            text_align: center
+            text_color: 0xE53935
+            text: ""
+        - obj:
+            id: home_menu_panel
+            hidden: true
+            width: 190
+            height: 138
+            align: CENTER
+            bg_color: 0x111111
+            bg_opa: 92%
+            radius: 18
+            border_width: 1
+            border_color: 0x455A64
+            pad_all: 0
+            widgets:
+              - label:
+                  align: TOP_MID
+                  y: 12
+                  text_color: White
+                  text: "Home"
+        - button:
+            id: all_lights_off_button
+            hidden: true
+            width: 118
+            height: 42
+            align: CENTER
+            y: -16
+            radius: 21
+            bg_color: 0x37474F
+            text_color: White
+            border_width: 0
+            on_click:
+              then:
+                - script.execute: home_all_lights_off
+                - script.execute: close_home_menu
+                - script.execute: reset_idle_timer
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "All Off"
+        - button:
+            id: menu_music_play_button
+            hidden: true
+            width: 118
+            height: 42
+            align: CENTER
+            y: 38
+            radius: 21
+            bg_color: 0x43A047
+            text_color: White
+            border_width: 0
+            on_click:
+              then:
+                - if:
+                    condition:
+                      lambda: |-
+                        return id(media_player_state).has_state() && id(media_player_state).state == "playing";
+                    then:
+                      - script.execute: open_media_screen
+                    else:
+                      - script.execute: open_media_screen
+                      - script.execute: play_morning_music_on_ha
+                - script.execute: reset_idle_timer
+            widgets:
+              - label:
+                  id: menu_music_play_label
+                  align: CENTER
+                  text_align: center
+                  text: "Start music"
+        - button:
+            id: close_menu_button
+            hidden: true
+            width: 34
+            height: 34
+            x: 66
+            y: -38
+            align: CENTER
+            radius: 17
+            bg_color: 0x546E7A
+            text_color: White
+            border_width: 0
+            on_click:
+              then:
+                - script.execute: close_home_menu
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "X"
+        - button:
+            id: snooze_button
+            hidden: true
+            width: 88
+            height: 88
+            x: -66
+            y: 0
+            align: CENTER
+            radius: 44
+            bg_color: 0x1E88E5
+            text_color: White
+            border_width: 0
+            on_click:
+              then:
+                - script.execute: snooze_alarm
+                - script.execute: reset_idle_timer
+            widgets:
+              - label:
+                  id: snooze_button_label
+                  align: CENTER
+                  text_align: center
+                  text: "Snooze\n10 min"
+        - button:
+            id: stop_button
+            hidden: true
+            width: 88
+            height: 88
+            x: 66
+            y: 0
+            align: CENTER
+            radius: 44
+            bg_color: 0xE53935
+            text_color: White
+            border_width: 0
+            on_click:
+              then:
+                - script.execute: dismiss_alarm
+                - script.execute: reset_idle_timer
+            widgets:
+              - label:
+                  align: CENTER
+                  text_align: center
+                  text: "Stop"
+        - button:
+            id: morning_music_button
+            hidden: true
+            width: 104
+            height: 38
+            align: CENTER
+            y: 74
+            radius: 19
+            bg_color: 0x43A047
+            text_color: White
+            border_width: 0
+            on_click:
+              then:
+                - script.execute: open_media_screen
+                - script.execute: play_morning_music_on_ha
+                - lambda: |-
+                    id(morning_music_prompt_until_ms) = 0;
+                - script.execute: update_alarm_status_ui
+                - script.execute: reset_idle_timer
+            widgets:
+              - label:
+                  align: CENTER
+                  text_align: center
+                  text: "Music"
+        - obj:
+            id: media_screen_panel
+            hidden: true
+            width: 100%
+            height: 100%
+            align: CENTER
+            bg_color: Black
+            bg_opa: COVER
+            radius: 0
+            clip_corner: false
+            pad_all: 0
+            border_width: 0
+            widgets:
+              - arc:
+                  id: media_volume_arc
+                  hidden: true
+                  width: 226
+                  height: 226
+                  align: CENTER
+                  value: 50
+                  min_value: 0
+                  max_value: 100
+                  start_angle: 135
+                  end_angle: 45
+                  adjustable: false
+                  arc_width: 8
+                  arc_color: 0x43A047
+              - label:
+                  id: media_title_label
+                  width: 204
+                  align: CENTER
+                  y: -54
+                  text_align: center
+                  text_color: White
+                  text_font: media_text_font_16
+                  long_mode: dot
+                  text: "No track"
+              - label:
+                  id: media_artist_label
+                  width: 196
+                  align: CENTER
+                  y: -24
+                  text_align: center
+                  text_color: 0xB0BEC5
+                  text_font: media_text_font_14
+                  long_mode: dot
+                  text: ""
+              - button:
+                  id: media_play_pause_button
+                  width: 52
+                  height: 52
+                  x: -56
+                  y: 46
+                  align: CENTER
+                  radius: 26
+                  bg_color: 0x43A047
+                  text_color: White
+                  border_width: 0
+                  on_click:
+                    then:
+                      - script.execute: media_play_pause_on_ha
+                      - script.execute: reset_idle_timer
+                  widgets:
+                    - label:
+                        id: media_play_pause_icon_label
+                        width: 100%
+                        height: 100%
+                        align: CENTER
+                        text_align: center
+                        text_font: media_icon_font_28
+                        text: "▶"
+              - button:
+                  id: media_next_button
+                  width: 52
+                  height: 52
+                  x: 0
+                  y: 46
+                  align: CENTER
+                  radius: 26
+                  bg_color: 0x1E88E5
+                  text_color: White
+                  border_width: 0
+                  on_click:
+                    then:
+                      - script.execute: media_next_track_on_ha
+                      - script.execute: reset_idle_timer
+                  widgets:
+                    - label:
+                        width: 100%
+                        height: 100%
+                        align: CENTER
+                        text_align: center
+                        text_font: media_icon_font_28
+                        text: "»"
+              - button:
+                  id: media_stop_button
+                  width: 52
+                  height: 52
+                  x: 56
+                  y: 46
+                  align: CENTER
+                  radius: 26
+                  bg_color: 0xE53935
+                  text_color: White
+                  border_width: 0
+                  on_click:
+                    then:
+                      - script.execute: close_media_screen
+                      - script.execute: reset_idle_timer
+                      - script.execute: stop_morning_music_on_ha
+                  widgets:
+                    - label:
+                        width: 100%
+                        height: 100%
+                        align: CENTER
+                        text_align: center
+                        text_font: media_icon_font_28
+                        text: "■"
+        - label:
+            id: snooze_hint_label
+            hidden: true
+            align: CENTER
+            y: 76
+            text_align: center
+            text_color: 0xB0BEC5
+            text: "Rotate = snooze time"
+
 interval:
   - interval: 25ms
     then:
-
       - lvgl.indicator.update:
           id: secs_hand
           value: !lambda |-
-            auto now = id(rtctime).now();
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (!now.is_valid()) {
+              return 0.0f;
+            }
             struct timeval tv;
             gettimeofday(&tv, NULL);
             return (now.second * 12) + (tv.tv_usec / 83330.0);
-  
+
+  - interval: 250ms
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(media_screen_visible) && id(media_volume_overlay_until_ms) != 0 && millis() > id(media_volume_overlay_until_ms);
+          then:
+            - lambda: |-
+                id(media_volume_overlay_until_ms) = 0;
+            - lvgl.widget.hide: media_volume_arc
+
+  - interval: 1s
+    then:
+      - lambda: |-
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) {
+            now = id(rtctime).now();
+          }
+          if (!now.is_valid()) {
+            return;
+          }
+
+          const int minute_key = now.day_of_year * 1440 + now.hour * 60 + now.minute;
+          if (id(last_ui_minute_key) != minute_key) {
+            id(last_ui_minute_key) = minute_key;
+            id(sync_alarm_day_state).execute();
+            id(update_minutes_hand).execute();
+          }
+
+          if (id(last_alarm_debug_minute_key) != minute_key) {
+            id(last_alarm_debug_minute_key) = minute_key;
+            if (id(next_alarm_available)) {
+              auto next_alarm = ESPTime::from_epoch_local(id(next_alarm_epoch));
+              ESP_LOGI(
+                "alarm",
+                "Alarm check now=%02d:%02d:%02d target=%02d:%02d enabled=%d skip_next=%d ringing=%d snooze_active=%d override=%d",
+                now.hour,
+                now.minute,
+                now.second,
+                next_alarm.hour,
+                next_alarm.minute,
+                id(alarm_enabled),
+                id(skip_next_ring),
+                id(alarm_ringing),
+                id(snooze_active),
+                id(next_ring_override_active)
+              );
+            }
+          }
+      - if:
+          condition:
+            lambda: |-
+              auto now = id(sntp_time).now();
+              if (!now.is_valid()) {
+                now = id(rtctime).now();
+              }
+              if (!now.is_valid()) {
+                return false;
+              }
+              if (!id(alarm_enabled) || id(alarm_ringing)) {
+                return false;
+              }
+              if (!id(next_alarm_available)) {
+                return false;
+              }
+              const uint32_t now_minute = uint32_t(now.timestamp / 60);
+              const uint32_t target_minute = uint32_t(id(next_alarm_epoch) / 60);
+              if (now_minute != target_minute) {
+                return false;
+              }
+              if (id(last_alarm_minute_key) == int(target_minute)) {
+                return false;
+              }
+              id(last_alarm_minute_key) = int(target_minute);
+              ESP_LOGI("alarm", "Alarm trigger matched at %02d:%02d:%02d", now.hour, now.minute, now.second);
+              return true;
+          then:
+            - script.execute: start_alarm
+      - if:
+          condition:
+            lambda: |-
+              if (id(alarm_ringing)) {
+                return false;
+              }
+              if (id(screen_dimmed)) {
+                return false;
+              }
+              return millis() - id(last_interaction_ms) >= 60000;
+          then:
+            - lambda: |-
+                id(screen_dimmed) = true;
+                ESP_LOGD("ui", "Screen dimmed after inactivity");
+            - script.execute: apply_idle_brightness
+
+  - interval: 400ms
+    then:
+      - if:
+          condition:
+            lambda: "return id(alarm_ringing);"
+          then:
+            - lambda: |-
+                id(alarm_flash_on) = !id(alarm_flash_on);
+            - script.execute: update_alarm_status_ui
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(alarm_flash_on) || id(dismiss_feedback_until_ms) != 0 || id(morning_music_prompt_until_ms) != 0;
+                then:
+                  - lambda: |-
+                      if (id(alarm_flash_on)) {
+                        id(alarm_flash_on) = false;
+                      }
+                      if (id(dismiss_feedback_until_ms) != 0 && millis() >= id(dismiss_feedback_until_ms)) {
+                        id(dismiss_feedback_until_ms) = 0;
+                      }
+                      if (id(morning_music_prompt_until_ms) != 0 && millis() >= id(morning_music_prompt_until_ms)) {
+                        id(morning_music_prompt_until_ms) = 0;
+                      }
+                  - script.execute: update_alarm_status_ui
+
 script:
+  - id: sync_next_alarm_state
+    then:
+      - lambda: |-
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) {
+            now = id(rtctime).now();
+          }
+          if (!now.is_valid() || !id(alarm_enabled)) {
+            id(next_alarm_available) = false;
+            id(next_alarm_epoch) = 0;
+            return;
+          }
+
+          const uint32_t now_minute = uint32_t(now.timestamp / 60);
+          if (id(skip_next_ring)) {
+            const uint32_t skipped_minute = uint32_t(id(skip_next_ring_epoch) / 60);
+            if (id(skip_next_ring_epoch) == 0 || skipped_minute < now_minute) {
+              id(skip_next_ring) = false;
+              id(skip_next_ring_epoch) = 0;
+            }
+          }
+
+          if (id(next_ring_override_active)) {
+            const uint32_t override_minute = uint32_t(id(next_ring_override_epoch) / 60);
+            if (override_minute >= now_minute) {
+              if (id(skip_next_ring) && id(skip_next_ring_epoch) != 0 &&
+                  override_minute == uint32_t(id(skip_next_ring_epoch) / 60)) {
+                // Skip this one-time override and fall through to the next scheduled alarm.
+              } else {
+                id(next_alarm_available) = true;
+                id(next_alarm_epoch) = id(next_ring_override_epoch);
+                return;
+              }
+            }
+            id(next_ring_override_active) = false;
+            id(next_ring_override_epoch) = 0;
+          }
+
+          if (id(snooze_active)) {
+            int day_offset = (id(snooze_day_of_year) == now.day_of_year) ? 0 : 1;
+            const time_t midnight_epoch = now.timestamp - (now.hour * 3600) - (now.minute * 60) - now.second;
+            const uint32_t snooze_epoch = uint32_t(midnight_epoch + (day_offset * 86400) + (id(snooze_hour) * 3600) + (id(snooze_minute) * 60));
+            if (!(id(skip_next_ring) && id(skip_next_ring_epoch) != 0 &&
+                  uint32_t(snooze_epoch / 60) == uint32_t(id(skip_next_ring_epoch) / 60))) {
+              id(next_alarm_epoch) = snooze_epoch;
+              id(next_alarm_available) = true;
+              return;
+            }
+          }
+
+          const auto weekday_alarm = id(weekday_alarm_time);
+          const auto weekend_alarm = id(weekend_alarm_time);
+          if (weekday_alarm == nullptr || weekend_alarm == nullptr) {
+            id(next_alarm_available) = false;
+            id(next_alarm_epoch) = 0;
+            return;
+          }
+
+          bool found = false;
+          for (int offset = 0; offset < 8; offset++) {
+            const int candidate_dow = ((now.day_of_week - 1 + offset) % 7) + 1;
+            auto candidate_alarm = (candidate_dow == 1 || candidate_dow == 7) ? weekend_alarm : weekday_alarm;
+            const int now_total_minutes = now.hour * 60 + now.minute;
+            const int candidate_total_minutes = candidate_alarm->hour * 60 + candidate_alarm->minute;
+            const bool valid_time = offset > 0 ||
+                                    candidate_total_minutes >= now_total_minutes;
+            if (!valid_time) {
+              continue;
+            }
+            const time_t midnight_epoch = now.timestamp - (now.hour * 3600) - (now.minute * 60) - now.second;
+            const uint32_t candidate_epoch = uint32_t(midnight_epoch + (offset * 86400) + (candidate_alarm->hour * 3600) + (candidate_alarm->minute * 60));
+            if (id(skip_next_ring) && id(skip_next_ring_epoch) != 0 &&
+                uint32_t(candidate_epoch / 60) == uint32_t(id(skip_next_ring_epoch) / 60)) {
+              continue;
+            }
+            id(next_alarm_epoch) = candidate_epoch;
+            id(next_alarm_available) = true;
+            found = true;
+            break;
+          }
+
+          if (!found) {
+            id(next_alarm_available) = false;
+            id(next_alarm_epoch) = 0;
+          }
+
+  - id: clear_snooze
+    then:
+      - lambda: |-
+          id(snooze_active) = false;
+          id(snooze_day_of_year) = -1;
+          id(snooze_hour) = -1;
+          id(snooze_minute) = -1;
+
+  - id: enable_alarm
+    then:
+      - lambda: |-
+          if (!id(alarm_enabled)) {
+            ESP_LOGI("alarm", "Away mode disabled; alarm enabled");
+          }
+          id(alarm_enabled) = true;
+          id(alarm_enabled_switch).publish_state(true);
+      - script.execute: update_minutes_hand
+      - script.execute: reset_idle_timer
+
+  - id: dismiss_alarm
+    then:
+      - lambda: |-
+          id(dismiss_feedback_until_ms) = millis() + 3000;
+          id(morning_music_prompt_until_ms) = millis() + 60000;
+      - script.execute: clear_snooze
+      - script.execute: stop_alarm
+      - script.execute: play_morning_briefing_on_ha
+
+  - id: sync_alarm_day_state
+    then:
+      - script.execute: sync_next_alarm_state
+      - script.execute: update_alarm_status_ui
+
+  - id: toggle_skip_next_ring
+    then:
+      - script.execute: sync_next_alarm_state
+      - lambda: |-
+          if (id(skip_next_ring)) {
+            id(skip_next_ring) = false;
+            id(skip_next_ring_epoch) = 0;
+            ESP_LOGI("ui", "Skip next ring cleared");
+            return;
+          }
+          if (!id(next_alarm_available)) {
+            ESP_LOGW("ui", "Skip next ring requested but there is no next alarm available");
+            return;
+          }
+          id(skip_next_ring) = true;
+          id(skip_next_ring_epoch) = id(next_alarm_epoch);
+          auto skipped_alarm = ESPTime::from_epoch_local(id(skip_next_ring_epoch));
+          ESP_LOGI("ui", "Skip next ring set for %02d:%02d", skipped_alarm.hour, skipped_alarm.minute);
+      - script.execute: update_alarm_status_ui
+
+  - id: open_home_menu
+    then:
+      - lambda: |-
+          id(home_menu_visible) = true;
+          ESP_LOGI("ui", "Home menu opened");
+      - script.execute: update_alarm_status_ui
+      - script.execute: reset_idle_timer
+      - script.execute: auto_close_home_menu
+
+  - id: close_home_menu
+    then:
+      - lambda: |-
+          id(home_menu_visible) = false;
+          ESP_LOGI("ui", "Home menu closed");
+      - script.stop: auto_close_home_menu
+      - script.execute: update_alarm_status_ui
+      - script.execute: reset_idle_timer
+
+  - id: auto_close_home_menu
+    mode: restart
+    then:
+      - delay: 10s
+      - if:
+          condition:
+            lambda: "return id(home_menu_visible) && !id(alarm_ringing);"
+          then:
+            - lambda: |-
+                id(home_menu_visible) = false;
+                ESP_LOGI("ui", "Home menu auto-closed");
+            - script.execute: update_alarm_status_ui
+
+  - id: home_all_lights_off
+    then:
+      - lambda: |-
+          ESP_LOGI("ui", "Requesting Home Assistant action: all lights off");
+      - homeassistant.action:
+          action: ${home_lights_off_action}
+          data:
+            entity_id: ${home_lights_off_entity}
+          on_success:
+            - lambda: |-
+                ESP_LOGI("ui", "Requested Home Assistant action: all lights off");
+          on_error:
+            - lambda: |-
+                ESP_LOGW("ui", "All lights off action failed: %s", error.c_str());
+
+  - id: apply_active_brightness
+    then:
+      - light.turn_on:
+          id: display_backlight
+          brightness: !lambda |-
+            if (id(alarm_ringing)) {
+              return 1.0f;
+            }
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (now.is_valid() && (now.hour >= 23 || now.hour < 7)) {
+              return 0.30f;
+            }
+            return 1.0f;
+
+  - id: apply_idle_brightness
+    then:
+      - light.turn_on:
+          id: display_backlight
+          brightness: !lambda |-
+            if (id(alarm_ringing)) {
+              return 1.0f;
+            }
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (now.is_valid() && (now.hour >= 23 || now.hour < 7)) {
+              return 0.08f;
+            }
+            return 0.25f;
+
+  - id: start_alarm_media_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("alarm", "Requesting Home Assistant alarm audio start");
+      - homeassistant.action:
+          action: ${alarm_audio_start_action}
+          data:
+            entity_id: ${alarm_audio_player_entity}
+          on_success:
+            - if:
+                condition:
+                  lambda: "return id(alarm_ringing);"
+                then:
+                  - lambda: |-
+                      ESP_LOGI("alarm", "Requested Home Assistant alarm audio start");
+                  - script.stop: alarm_loop
+                  - output.turn_off: buzzer
+                else:
+                  - lambda: |-
+                      ESP_LOGW("alarm", "Home Assistant alarm audio started after alarm stopped; stopping media now");
+                  - script.execute: stop_alarm_media_on_ha
+          on_error:
+            - lambda: |-
+                ESP_LOGW("alarm", "Home Assistant alarm audio start failed: %s", error.c_str());
+
+  - id: stop_alarm_media_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("alarm", "Requesting Home Assistant alarm audio stop for %s", "${alarm_audio_player_entity}");
+      - homeassistant.action:
+          action: ${alarm_audio_stop_action}
+          data:
+            entity_id: ${alarm_audio_player_entity}
+          on_success:
+            - lambda: |-
+                ESP_LOGI("alarm", "Requested Home Assistant alarm audio stop for %s", "${alarm_audio_player_entity}");
+          on_error:
+            - lambda: |-
+                ESP_LOGW("alarm", "Home Assistant alarm audio stop failed: %s", error.c_str());
+
+  - id: play_morning_briefing_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("alarm", "Requesting Home Assistant morning briefing on %s", "${morning_briefing_player_entity}");
+      - homeassistant.action:
+          action: ${morning_briefing_action}
+          data:
+            media_player_entity_id: ${morning_briefing_player_entity}
+          on_success:
+            - lambda: |-
+                ESP_LOGI("alarm", "Requested Home Assistant morning briefing");
+          on_error:
+            - lambda: |-
+                ESP_LOGW("alarm", "Home Assistant morning briefing failed: %s", error.c_str());
+
+  - id: play_morning_music_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("alarm", "Requesting Home Assistant morning music on %s", "${morning_briefing_player_entity}");
+      - homeassistant.action:
+          action: ${morning_briefing_action}
+          data:
+            media_player_entity_id: ${morning_briefing_player_entity}
+            music_only: "true"
+          on_success:
+            - lambda: |-
+                ESP_LOGI("alarm", "Requested Home Assistant morning music");
+          on_error:
+            - lambda: |-
+                ESP_LOGW("alarm", "Home Assistant morning music failed: %s", error.c_str());
+      - delay: 1s
+      - homeassistant.action:
+          action: media_player.media_play
+          data:
+            entity_id: ${morning_briefing_player_entity}
+          on_error:
+            - lambda: |-
+                ESP_LOGW("alarm", "Home Assistant media_play after music start failed: %s", error.c_str());
+
+  - id: stop_morning_music_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("alarm", "Requesting Home Assistant morning music stop for %s", "${morning_briefing_player_entity}");
+      - homeassistant.action:
+          action: media_player.media_stop
+          data:
+            entity_id: ${morning_briefing_player_entity}
+          on_success:
+            - lambda: |-
+                ESP_LOGI("alarm", "Requested Home Assistant morning music stop for %s", "${morning_briefing_player_entity}");
+          on_error:
+            - lambda: |-
+                ESP_LOGW("alarm", "Home Assistant morning music stop failed: %s", error.c_str());
+
+  - id: open_media_screen
+    then:
+      - lambda: |-
+          id(media_screen_visible) = true;
+          id(home_menu_visible) = false;
+          ESP_LOGI("media", "Media screen opened");
+      - script.stop: auto_close_home_menu
+      - script.execute: update_media_screen_ui
+      - script.execute: update_alarm_status_ui
+      - script.execute: reset_idle_timer
+
+  - id: close_media_screen
+    then:
+      - lambda: |-
+          id(media_screen_visible) = false;
+          ESP_LOGI("media", "Media screen closed");
+      - script.execute: update_alarm_status_ui
+      - script.execute: reset_idle_timer
+
+  - id: media_play_pause_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("media", "Requesting media play/pause for %s", "${morning_briefing_player_entity}");
+      - homeassistant.action:
+          action: media_player.media_play_pause
+          data:
+            entity_id: ${morning_briefing_player_entity}
+          on_error:
+            - lambda: |-
+                ESP_LOGW("media", "Media play/pause failed: %s", error.c_str());
+
+  - id: media_next_track_on_ha
+    then:
+      - lambda: |-
+          ESP_LOGI("media", "Requesting media next track for %s", "${morning_briefing_player_entity}");
+      - homeassistant.action:
+          action: media_player.media_next_track
+          data:
+            entity_id: ${morning_briefing_player_entity}
+          on_error:
+            - lambda: |-
+                ESP_LOGW("media", "Media next track failed: %s", error.c_str());
+
+  - id: set_morning_music_volume_on_ha
+    mode: restart
+    then:
+      - homeassistant.action:
+          action: media_player.volume_set
+          data:
+            entity_id: ${morning_briefing_player_entity}
+            volume_level: !lambda |-
+              return id(media_volume_level);
+          on_error:
+            - lambda: |-
+                ESP_LOGW("media", "Media volume set failed: %s", error.c_str());
+
+  - id: show_media_volume_overlay
+    then:
+      - lambda: |-
+          id(media_volume_overlay_until_ms) = millis() + 1500;
+      - lvgl.widget.show: media_volume_arc
+      - script.execute: update_media_screen_ui
+
+  - id: update_media_screen_ui
+    then:
+      - lvgl.arc.update:
+          id: media_volume_arc
+          value: !lambda |-
+            return int(id(media_volume_level) * 100.0f + 0.5f);
+      - lvgl.label.update:
+          id: menu_music_play_label
+          text: !lambda |-
+            if (id(media_player_state).has_state() && id(media_player_state).state == "playing") {
+              return "Open music";
+            }
+            return "Start music";
+      - lvgl.label.update:
+          id: media_play_pause_icon_label
+          text: !lambda |-
+            if (id(media_player_state).has_state() && id(media_player_state).state == "playing") {
+              return "Ⅱ";
+            }
+            return "▶";
+      - lvgl.label.update:
+          id: media_title_label
+          text: !lambda |-
+            if (id(media_track_title).has_state() && !id(media_track_title).state.empty()) {
+              return id(media_track_title).state.c_str();
+            }
+            if (id(media_player_state).has_state() && id(media_player_state).state == "playing") {
+              return "Playing";
+            }
+            return "No track";
+      - lvgl.label.update:
+          id: media_artist_label
+          text: !lambda |-
+            if (id(media_track_artist).has_state() && !id(media_track_artist).state.empty()) {
+              return id(media_track_artist).state.c_str();
+            }
+            if (id(media_track_album).has_state() && !id(media_track_album).state.empty()) {
+              return id(media_track_album).state.c_str();
+            }
+            if (id(media_player_state).has_state()) {
+              return id(media_player_state).state.c_str();
+            }
+            return "Rotate = volume";
+
+  - id: reset_idle_timer
+    mode: restart
+    then:
+      - lambda: |-
+          id(last_interaction_ms) = millis();
+          const bool was_dimmed = id(screen_dimmed);
+          id(screen_dimmed) = false;
+          if (was_dimmed) {
+            ESP_LOGD("ui", "Screen restored from idle dim");
+          }
+      - script.execute: apply_active_brightness
+
+  - id: update_alarm_status_ui
+    then:
+      - script.execute: sync_next_alarm_state
+      - lvgl.label.update:
+          id: snooze_button_label
+          text: !lambda |-
+            static char snooze_buf[24];
+            snprintf(snooze_buf, sizeof(snooze_buf), "Snooze\n%d min", id(snooze_minutes));
+            return snooze_buf;
+      - lvgl.label.update:
+          id: sleep_hint_label
+          text: !lambda |-
+            static char sleep_buf[16];
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (!now.is_valid() || !id(alarm_enabled) || !id(next_alarm_available) || id(snooze_active)) {
+              snprintf(sleep_buf, sizeof(sleep_buf), "");
+              return sleep_buf;
+            }
+            const int32_t seconds_until_alarm = int32_t(id(next_alarm_epoch)) - int32_t(now.timestamp);
+            if (seconds_until_alarm <= 0 || seconds_until_alarm > (8 * 3600)) {
+              snprintf(sleep_buf, sizeof(sleep_buf), "");
+              return sleep_buf;
+            }
+            const int hours = seconds_until_alarm / 3600;
+            const int minutes = (seconds_until_alarm % 3600) / 60;
+            snprintf(sleep_buf, sizeof(sleep_buf), "%dh %02dm", hours, minutes);
+            return sleep_buf;
+      - lvgl.label.update:
+          id: alarm_label
+          text_color: !lambda |-
+            if (!id(alarm_enabled)) {
+              return lv_color_hex(0xCE93D8);
+            }
+            return lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: alarm_label
+          text: !lambda |-
+            static char alarm_buf[24];
+            if (!id(alarm_enabled)) {
+              snprintf(alarm_buf, sizeof(alarm_buf), "Away Mode");
+            } else if (id(alarm_ringing)) {
+              snprintf(alarm_buf, sizeof(alarm_buf), "Alarm!");
+            } else if (id(dismiss_feedback_until_ms) != 0 && millis() < id(dismiss_feedback_until_ms)) {
+              snprintf(alarm_buf, sizeof(alarm_buf), "Stopped");
+            } else if (id(snooze_active)) {
+              snprintf(alarm_buf, sizeof(alarm_buf), "Snoozing");
+            } else if (id(next_ring_override_active)) {
+              snprintf(alarm_buf, sizeof(alarm_buf), "One-Time");
+            } else {
+              snprintf(alarm_buf, sizeof(alarm_buf), "Next Ring");
+            }
+            return alarm_buf;
+      - lvgl.label.update:
+          id: date_label
+          text_color: !lambda |-
+            if (!id(alarm_enabled)) {
+              return lv_color_hex(0xFFFFFF);
+            }
+            if (id(next_ring_override_active) && id(alarm_enabled) && !id(alarm_ringing) &&
+                !id(snooze_active) && !id(skip_next_ring) &&
+                !(id(dismiss_feedback_until_ms) != 0 && millis() < id(dismiss_feedback_until_ms))) {
+              return lv_color_hex(0xFFB300);
+            }
+            return lv_color_hex(0xFFFFFF);
+      - lvgl.label.update:
+          id: date_label
+          text: !lambda |-
+            static const char *const day_names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+            static char date_buf[24];
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+
+            if (!id(alarm_enabled)) {
+              snprintf(date_buf, sizeof(date_buf), "Tap to\nresume");
+            } else if (id(dismiss_feedback_until_ms) != 0 && millis() < id(dismiss_feedback_until_ms)) {
+              snprintf(date_buf, sizeof(date_buf), "Dismissed");
+            } else if (id(snooze_active)) {
+              if (!now.is_valid()) {
+                snprintf(date_buf, sizeof(date_buf), "Until %02d:%02d", id(snooze_hour), id(snooze_minute));
+              } else if (id(snooze_day_of_year) == now.day_of_year) {
+                snprintf(date_buf, sizeof(date_buf), "Today %02d:%02d", id(snooze_hour), id(snooze_minute));
+              } else if (id(snooze_day_of_year) == now.day_of_year + 1) {
+                snprintf(date_buf, sizeof(date_buf), "Tomorrow %02d:%02d", id(snooze_hour), id(snooze_minute));
+              } else {
+                snprintf(date_buf, sizeof(date_buf), "Until %02d:%02d", id(snooze_hour), id(snooze_minute));
+              }
+            } else if (id(skip_next_ring)) {
+              snprintf(date_buf, sizeof(date_buf), "Skipped");
+            } else if (!now.is_valid() || now.day_of_week < 1 || now.day_of_week > 7 || now.month < 1 || now.month > 12) {
+              snprintf(date_buf, sizeof(date_buf), "--");
+            } else if (!id(next_alarm_available)) {
+                snprintf(date_buf, sizeof(date_buf), "No next ring");
+            } else {
+              auto next_alarm = ESPTime::from_epoch_local(id(next_alarm_epoch));
+              int day_delta = next_alarm.day_of_year - now.day_of_year;
+              if (day_delta < 0) {
+                day_delta += 366;
+              }
+              if (day_delta == 0) {
+                snprintf(date_buf, sizeof(date_buf), "Today\n%02d:%02d", next_alarm.hour, next_alarm.minute);
+              } else if (day_delta == 1) {
+                snprintf(date_buf, sizeof(date_buf), "Tomorrow\n%02d:%02d", next_alarm.hour, next_alarm.minute);
+              } else {
+                snprintf(date_buf, sizeof(date_buf), "%s\n%02d:%02d", day_names[next_alarm.day_of_week - 1], next_alarm.hour, next_alarm.minute);
+              }
+            }
+            return date_buf;
+      - lvgl.widget.update:
+          id: alarm_status_circle
+          bg_color: !lambda |-
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (id(alarm_ringing)) {
+              return id(alarm_flash_on) ? lv_color_hex(0xFF7043) : lv_color_hex(0xE53935);
+            }
+            if (id(dismiss_feedback_until_ms) != 0 && millis() < id(dismiss_feedback_until_ms)) {
+              return lv_color_hex(0x43A047);
+            }
+            if (id(snooze_active)) {
+              return lv_color_hex(0x1E88E5);
+            }
+            if (!id(alarm_enabled)) {
+              return lv_color_hex(0x7B1FA2);
+            }
+            if (id(skip_next_ring)) {
+              return lv_color_hex(0xFFD54F);
+            }
+            return lv_color_hex(0x000000);
+      - if:
+          condition:
+            lambda: "return id(alarm_ringing);"
+          then:
+            - if:
+                condition:
+                  lambda: "return !id(ring_controls_visible);"
+                then:
+                  - lambda: |-
+                      id(ring_controls_visible) = true;
+                      id(home_menu_visible) = false;
+                  - lvgl.widget.hide: [alarm_status_circle, center_tap_button, sleep_hint_label, home_menu_panel, all_lights_off_button, close_menu_button, morning_music_button, menu_music_play_button, media_screen_panel]
+                  - lvgl.widget.show: [snooze_button, stop_button, snooze_hint_label]
+          else:
+            - if:
+                condition:
+                  lambda: "return id(ring_controls_visible);"
+                then:
+                  - lambda: |-
+                      id(ring_controls_visible) = false;
+                  - lvgl.widget.hide: [snooze_button, stop_button, snooze_hint_label, morning_music_button, menu_music_play_button]
+            - if:
+                condition:
+                  lambda: "return id(media_screen_visible);"
+                then:
+                  - lvgl.widget.hide: [alarm_status_circle, center_tap_button, sleep_hint_label, home_menu_panel, all_lights_off_button, menu_music_play_button, close_menu_button, morning_music_button]
+                  - lvgl.widget.show: [media_screen_panel]
+                else:
+                  - lvgl.widget.hide: [media_screen_panel]
+                  - if:
+                      condition:
+                        lambda: "return id(home_menu_visible);"
+                      then:
+                        - lvgl.widget.hide: [alarm_status_circle, center_tap_button, sleep_hint_label, morning_music_button]
+                        - lvgl.widget.show: [home_menu_panel, all_lights_off_button, menu_music_play_button, close_menu_button]
+                      else:
+                        - lvgl.widget.hide: [home_menu_panel, all_lights_off_button, menu_music_play_button, close_menu_button]
+                        - lvgl.widget.show: [alarm_status_circle, center_tap_button]
+                  - if:
+                      condition:
+                        lambda: |-
+                          auto now = id(sntp_time).now();
+                          if (!now.is_valid()) {
+                            now = id(rtctime).now();
+                          }
+                          if (!now.is_valid() || !id(alarm_enabled) || !id(next_alarm_available) || id(snooze_active)) {
+                            return false;
+                          }
+                          const int32_t seconds_until_alarm = int32_t(id(next_alarm_epoch)) - int32_t(now.timestamp);
+                          return seconds_until_alarm > 0 && seconds_until_alarm <= (8 * 3600);
+                      then:
+                        - lvgl.widget.show: [sleep_hint_label]
+                      else:
+                        - lvgl.widget.hide: [sleep_hint_label]
+                  - if:
+                      condition:
+                        lambda: |-
+                          return id(morning_music_prompt_until_ms) != 0 && millis() < id(morning_music_prompt_until_ms);
+                      then:
+                        - lvgl.widget.show: [morning_music_button]
+                      else:
+                        - lvgl.widget.hide: [morning_music_button]
+
+  - id: apply_snooze_duration
+    parameters:
+      minutes: int
+    then:
+      - lambda: |-
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) {
+            now = id(rtctime).now();
+          }
+          if (!now.is_valid()) {
+            ESP_LOGW("alarm", "Snooze requested but current time is invalid");
+            return;
+          }
+          auto snooze_until = esphome::ESPTime::from_epoch_local(now.timestamp + (minutes * 60));
+          id(snooze_active) = true;
+          id(snooze_day_of_year) = snooze_until.day_of_year;
+          id(snooze_hour) = snooze_until.hour;
+          id(snooze_minute) = snooze_until.minute;
+          ESP_LOGI("alarm", "Snoozed for %d minutes until day=%d %02d:%02d", minutes, id(snooze_day_of_year), id(snooze_hour), id(snooze_minute));
+      - script.execute: stop_alarm
+      - script.execute: update_minutes_hand
+
+  - id: snooze_alarm
+    then:
+      - script.execute:
+          id: apply_snooze_duration
+          minutes: !lambda "return id(snooze_minutes);"
+
+  - id: snooze_alarm_five_minutes
+    then:
+      - script.execute:
+          id: apply_snooze_duration
+          minutes: 5
+
+  - id: start_alarm
+    mode: restart
+    then:
+      - script.execute: clear_snooze
+      - lambda: |-
+          id(next_ring_override_active) = false;
+          id(next_ring_override_epoch) = 0;
+          id(snooze_minutes) = 10;
+          id(alarm_ringing) = true;
+          id(home_menu_visible) = false;
+          id(media_screen_visible) = false;
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) {
+            now = id(rtctime).now();
+          }
+          ESP_LOGI("alarm", "Starting alarm at %02d:%02d:%02d", now.hour, now.minute, now.second);
+      - script.execute: apply_active_brightness
+      - script.execute: update_minutes_hand
+      - script.execute: start_alarm_media_on_ha
+      - script.execute: alarm_loop
+      - script.execute: alarm_timeout
+
+  - id: stop_alarm
+    then:
+      - lambda: |-
+          if (id(alarm_ringing)) {
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            ESP_LOGI("alarm", "Stopping alarm at %02d:%02d:%02d", now.hour, now.minute, now.second);
+          }
+          id(alarm_ringing) = false;
+      - script.stop: alarm_loop
+      - script.stop: alarm_timeout
+      - output.turn_off: buzzer
+      - script.execute: stop_alarm_media_on_ha
+      - script.execute: update_minutes_hand
+      - script.execute: reset_idle_timer
+
+  - id: alarm_loop
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: "return id(alarm_ringing);"
+          then:
+            - output.ledc.set_frequency:
+                id: buzzer
+                frequency: "3200Hz"
+            - output.set_level:
+                id: buzzer
+                level: 50%
+            - delay: 950ms
+            - output.turn_off: buzzer
+            - delay: 100ms
+            - output.ledc.set_frequency:
+                id: buzzer
+                frequency: "2800Hz"
+            - output.set_level:
+                id: buzzer
+                level: 50%
+            - delay: 950ms
+            - output.turn_off: buzzer
+            - delay: 250ms
+
+  - id: alarm_timeout
+    mode: restart
+    then:
+      - delay: 5min
+      - if:
+          condition:
+            lambda: "return id(alarm_ringing);"
+          then:
+            - logger.log: "Alarm timed out after 5 minutes"
+            - script.execute: stop_alarm
+
   - id: update_minutes_hand
     then:
+      - script.execute: update_alarm_status_ui
       - lvgl.indicator.update:
           id: hour_hand
           value: !lambda |-
-            auto now = id(rtctime).now();
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (!now.is_valid()) {
+              return 0.0f;
+            }
             return std::fmod(now.hour, 12) * 60 + now.minute;
       - lvgl.indicator.update:
           id: minute_hand
           value: !lambda |-
-            return id(rtctime).now().minute;
-      - lvgl.label.update:
-          id: alarm_label
-          text: !lambda |-
-            auto alarm_time_var = id(alarm_time);
-            static char alarm_buf[16];
-            snprintf(alarm_buf, sizeof(alarm_buf), "Alarm %02d:%02d", alarm_time_var->hour, alarm_time_var->minute);
-            return alarm_buf;
-      - lvgl.label.update:
-          id: date_label
-          text: !lambda |-
-            static const char * const day_names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-            static const char * const mon_names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-            static char date_buf[16];
-            auto now = id(rtctime).now();
-            snprintf(date_buf, sizeof(date_buf), "%s, %s %2d", day_names[id(rtctime).now().day_of_week - 1], mon_names[now.month-1], now.day_of_month);
-            return date_buf;
+            auto now = id(sntp_time).now();
+            if (!now.is_valid()) {
+              now = id(rtctime).now();
+            }
+            if (!now.is_valid()) {
+              return 0.0f;
+            }
+            return float(now.minute);
