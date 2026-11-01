@@ -7,8 +7,6 @@ esphome:
       - pcf8563.read_time:
       - light.turn_on: display_backlight
       - script.execute: update_minutes_hand
-  platformio_options:
-    board_build.flash_mode: dio
 
 packages:
   core: !include debug.yaml
@@ -21,6 +19,8 @@ esp32:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # Weak signal at the bedside; light power save drops API keep-alives (tomwilkie/home#7).
+  power_save_mode: none
 
   ap:
     ssid: "Clock Fallback Hotspot"
@@ -31,12 +31,15 @@ captive_portal:
 
 api:
   reboot_timeout: 0s
-
-web_server:
+  encryption:
+    key: !secret api_encryption_key
 
 ota:
   - platform: esphome
     password: !secret ota_password
+    # Migration only: remove allow_plaintext_upload and password once flashed.
+    encryption:
+      allow_plaintext_upload: true
 
 logger:
 
@@ -44,11 +47,6 @@ i2c:
   - id: internal_i2c
     sda: GPIO11
     scl: GPIO12
-
-rc522_i2c:
-  - id: nfc_reader
-    i2c_id: internal_i2c
-    address: 0x28
 
 output:
   - platform: ledc
@@ -98,10 +96,9 @@ time:
   - platform: sntp
     id: sntp_time
     timezone: Europe/London
+    # chrony on Home Assistant; ESPHome ignores the DHCP NTP option.
     servers:
-     - 0.pool.ntp.org
-     - 1.pool.ntp.org
-     - 2.pool.ntp.org
+      - 192.168.0.12
     on_time_sync:
       then:
         - pcf8563.write_time:
@@ -124,7 +121,9 @@ binary_sensor:
   - platform: gpio
     name: Button
     id: front_button
-    pin: GPIO42
+    pin:
+      number: GPIO42
+      inverted: true
 
   - platform: gpio
     name: Hold Button
@@ -143,13 +142,18 @@ light:
     default_transition_length: 0s
 
 display:
-  - platform: ili9xxx
+  - platform: mipi_spi
     id: round_display
     model: GC9A01A
     cs_pin: GPIO7
     reset_pin: GPIO8
     dc_pin: GPIO4
     invert_colors: true
+    # mipi_spi mirrors the GC9A01A by default; ili9xxx did not.
+    transform:
+      mirror_x: false
+      mirror_y: false
+      swap_xy: false
     auto_clear_enabled: false
     update_interval: never
 
@@ -191,7 +195,7 @@ lvgl:
                       id: minute_hand
                       width: 2
                       color: White
-                      r_mod: -25
+                      length: -25
                       value: 0
               - range_from: 1 # hours scale for labels
                 range_to: 12
@@ -212,19 +216,21 @@ lvgl:
                 angle_range: 360
                 rotation: 270
                 ticks:
-                  count: 0
+                  count: 2
+                  width: 0
+                  length: 0
                 indicators:
                   - line:
                       id: hour_hand
                       width: 4
                       color: White
-                      r_mod: -40
+                      length: -40
                       value: 0
                   - line:
                       id: secs_hand
                       width: 1
                       color: Red
-                      r_mod: -15
+                      length: -15
                       value: 0
         - obj:
             width: 120
@@ -249,7 +255,7 @@ lvgl:
                   text: ""
                                 
 interval:
-  - interval: 25ms
+  - interval: 100ms
     then:
 
       - lvgl.indicator.update:
@@ -287,5 +293,7 @@ script:
                                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
             static char date_buf[16];
             auto now = id(rtctime).now();
-            snprintf(date_buf, sizeof(date_buf), "%s, %s %2d", day_names[id(rtctime).now().day_of_week - 1], mon_names[now.month-1], now.day_of_month);
+            if (!now.is_valid())
+              return "";
+            snprintf(date_buf, sizeof(date_buf), "%s, %s %2d", day_names[now.day_of_week - 1], mon_names[now.month - 1], now.day_of_month);
             return date_buf;
