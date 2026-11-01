@@ -50,3 +50,14 @@ button:
   - platform: restart
     icon: mdi:power-cycle
     name: "ESP Reboot"
+
+# Ship the device log to Alloy on the Home Assistant host, which forwards it
+# to Loki. Each device config must define a time source. See esphome.md in
+# tomwilkie/home.
+udp:
+  addresses:
+    - 192.168.0.12
+
+syslog:
+  port: 5140
+  format: RFC5424
