@@ -18,8 +18,6 @@ esp32:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # Weak signal at the bedside; light power save drops API keep-alives (tomwilkie/home#7).
-  power_save_mode: none
 
   ap:
     ssid: "Clock Fallback Hotspot"
