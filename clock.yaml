@@ -144,11 +144,6 @@ display:
     reset_pin: GPIO8
     dc_pin: GPIO4
     invert_colors: true
-    # mipi_spi mirrors the GC9A01A by default; ili9xxx did not.
-    transform:
-      mirror_x: false
-      mirror_y: false
-      swap_xy: false
     auto_clear_enabled: false
     update_interval: never
 
