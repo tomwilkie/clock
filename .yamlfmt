@@ -1,0 +1,8 @@
+formatter:
+  type: basic
+  retain_line_breaks_single: true
+  indent: 2
+  scan_folded_as_literal: true
+  trim_trailing_whitespace: true
+  eof_newline: true
+gitignore_excludes: true

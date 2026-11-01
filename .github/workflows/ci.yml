@@ -1,0 +1,39 @@
+name: ESPHome
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - run: go install github.com/google/yamlfmt/cmd/yamlfmt@v0.21.0
+      - name: Check formatting (fix locally with `yamlfmt .`)
+        run: yamlfmt -lint .
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Write placeholder secrets
+        run: |
+          cat > secrets.yaml <<'SECRETS'
+          wifi_ssid: ci
+          wifi_password: ci-password
+          ota_password: ci-ota-password
+          api_encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+          SECRETS
+      - uses: esphome/build-action@v8.1.0
+        with:
+          yaml-file: clock.yaml

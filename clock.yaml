@@ -1,4 +1,3 @@
----
 esphome:
   name: clock
   friendly_name: Clock
@@ -25,7 +24,6 @@ wifi:
   ap:
     ssid: "Clock Fallback Hotspot"
     password: !secret wifi_password
-
 
 captive_portal:
 
@@ -159,7 +157,7 @@ display:
 
 lvgl:
   style_definitions:
-    - id: date_style      # choose an ID for your definition
+    - id: date_style # choose an ID for your definition
       text_font: montserrat_14
       align: center
       text_color: White
@@ -253,7 +251,7 @@ lvgl:
                   styles: date_style
                   y: 20
                   text: ""
-                                
+
 interval:
   - interval: 100ms
     then:
@@ -265,7 +263,7 @@ interval:
             struct timeval tv;
             gettimeofday(&tv, NULL);
             return (now.second * 12) + (tv.tv_usec / 83330.0);
-  
+
 script:
   - id: update_minutes_hand
     then:
