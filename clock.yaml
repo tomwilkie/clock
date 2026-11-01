@@ -34,10 +34,7 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
-    # Migration only: remove allow_plaintext_upload and password once flashed.
     encryption:
-      allow_plaintext_upload: true
 
 logger:
 
