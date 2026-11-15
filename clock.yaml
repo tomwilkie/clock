@@ -156,7 +156,7 @@ font:
       family: Roboto Condensed
       weight: 500
     id: minute_font
-    size: 24
+    size: 21
     glyphs: "0123456789"
   - file:
       type: gfonts
@@ -261,10 +261,10 @@ lvgl:
             x: -43
             y: -74
         - obj:
-            width: 112
-            height: 112
+            width: 124
+            height: 124
             align: CENTER
-            radius: 56
+            radius: 62
             bg_opa: TRANSP
             border_width: 2
             border_color: 0xE8DDBE
@@ -272,63 +272,63 @@ lvgl:
         - label:
             styles: hour_numeral
             text: "1"
-            x: 22
-            y: -38
+            x: 24
+            y: -42
         - label:
             styles: hour_numeral
             text: "2"
-            x: 38
-            y: -22
+            x: 42
+            y: -24
         - label:
             styles: hour_numeral
             text: "3"
-            x: 44
+            x: 48
             y: 0
         - label:
             styles: hour_numeral
             text: "4"
-            x: 38
-            y: 22
+            x: 42
+            y: 24
         - label:
             styles: hour_numeral
             text: "5"
-            x: 22
-            y: 38
+            x: 24
+            y: 42
         - label:
             styles: hour_numeral
             text: "6"
             x: 0
-            y: 44
+            y: 48
         - label:
             styles: hour_numeral
             text: "7"
-            x: -22
-            y: 38
+            x: -24
+            y: 42
         - label:
             styles: hour_numeral
             text: "8"
-            x: -38
-            y: 22
+            x: -42
+            y: 24
         - label:
             styles: hour_numeral
             text: "9"
-            x: -44
+            x: -48
             y: 0
         - label:
             styles: hour_numeral
             text: "10"
-            x: -38
-            y: -22
+            x: -42
+            y: -24
         - label:
             styles: hour_numeral
             text: "11"
-            x: -22
-            y: -38
+            x: -24
+            y: -42
         - label:
             styles: hour_numeral
             text: "12"
             x: 0
-            y: -44
+            y: -48
         - meter:
             height: 100%
             width: 100%
@@ -405,20 +405,22 @@ lvgl:
         - obj:
             id: alarm_circle
             hidden: true
-            width: 120
-            height: 120
+            width: 124
+            height: 124
             align: CENTER
             bg_color: Black
             bg_opa: 85%
-            radius: 60
+            radius: 62
             clip_corner: true
             pad_all: 0
-            border_width: 1
+            border_width: 2
+            border_color: 0xE8DDBE
             widgets:
               - label:
                   styles: date_style
                   id: alarm_label
-                  y: -20
+                  text_color: 0xE8DDBE
+                  text_align: center
                   text: ""
 
 interval:
@@ -464,7 +466,7 @@ script:
           text: !lambda |-
             auto alarm_time_var = id(alarm_time);
             static char alarm_buf[16];
-            snprintf(alarm_buf, sizeof(alarm_buf), "Alarm %02d:%02d", alarm_time_var->hour, alarm_time_var->minute);
+            snprintf(alarm_buf, sizeof(alarm_buf), "Alarm\n%02d:%02d", alarm_time_var->hour, alarm_time_var->minute);
             return alarm_buf;
 
   # Hide the alarm circle three seconds after the last turn of the dial.
