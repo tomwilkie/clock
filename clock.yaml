@@ -1,3 +1,11 @@
+substitutions:
+  # The hour ring and the alarm circle share one diameter.
+  ring_size: "124"
+  # Second hand geometry, in pixels on the 240 x 240 display.
+  centre: "120"
+  secs_tip: "114"
+  secs_tail: "16"
+
 esphome:
   name: clock
   friendly_name: Clock
@@ -156,25 +164,17 @@ color:
     hex: E8DDBE
 
 font:
-  - file:
-      type: gfonts
-      family: Roboto Condensed
-      weight: 500
+  - file: fonts/RobotoCondensed-Medium.ttf
     id: minute_font
     bpp: 4
     size: 21
     glyphs: "0123456789:Alarm"
-  - file:
-      type: gfonts
-      family: Roboto Condensed
-      weight: 500
+  - file: fonts/RobotoCondensed-Medium.ttf
     id: hour_font
     bpp: 4
     size: 15
     glyphs: "0123456789"
-  - file:
-      type: gfonts
-      family: Noto Sans Symbols 2
+  - file: fonts/NotoSansSymbols2-Triangle.ttf
     id: triangle_font
     bpp: 4
     size: 22
@@ -183,13 +183,11 @@ font:
 lvgl:
   refresh_interval: 10ms
   style_definitions:
-    - id: date_style # choose an ID for your definition
-      text_font: montserrat_14
+    - id: alarm_style
+      text_font: minute_font
+      text_color: lume
+      text_align: center
       align: center
-      text_color: White
-      bg_opa: TRANSP
-      radius: 4
-      pad_all: 2
     - id: minute_numeral
       text_font: minute_font
       text_color: lume
@@ -206,7 +204,9 @@ lvgl:
       widgets:
         # The Type B dial sits before the meter, so the meter's hands draw
         # over it: minute numerals on the outer ring, a triangle at 12 and
-        # the hours inside an inner ring.
+        # the hours inside an inner ring. The numeral positions are worked
+        # out at 30 degree steps, 86 px from the centre for the minutes and
+        # 48 px for the hours: x = r * sin(a), y = -r * cos(a), rounded.
         - label:
             text_font: triangle_font
             text_color: lume
@@ -269,10 +269,10 @@ lvgl:
             x: -43
             y: -74
         - obj:
-            width: 124
-            height: 124
+            width: ${ring_size}
+            height: ${ring_size}
             align: CENTER
-            radius: 62
+            radius: circle
             bg_opa: TRANSP
             border_width: 2
             border_color: lume
@@ -403,9 +403,11 @@ lvgl:
                       value: 0
         # The second hand is a separate line widget, not a meter indicator,
         # because indicator angles round to whole degrees. It sits after the
-        # meter and before the centre circle, so the circle draws on top.
+        # meter and before the centre cap and the alarm circle, which draw
+        # on top. It stays hidden until the clock has a valid time.
         - line:
             id: secs_hand
+            hidden: true
             points:
               - 0, 0
               - 0, 0
@@ -425,29 +427,33 @@ lvgl:
         - obj:
             id: alarm_circle
             hidden: true
-            width: 124
-            height: 124
+            width: ${ring_size}
+            height: ${ring_size}
             align: CENTER
             bg_color: Black
             bg_opa: 85%
-            radius: 62
+            radius: circle
             clip_corner: true
             pad_all: 0
             border_width: 2
             border_color: lume
             widgets:
               - label:
-                  styles: date_style
+                  styles: alarm_style
                   id: alarm_label
-                  text_font: minute_font
-                  text_color: lume
-                  text_align: center
                   text: ""
 
 interval:
   - interval: 33ms
     then:
       - lambda: |-
+          lv_obj_t *hand = id(secs_hand)->obj;
+          if (!id(rtctime).now().is_valid()) {
+            lv_obj_add_flag(hand, LV_OBJ_FLAG_HIDDEN);
+            return;
+          }
+          if (lv_obj_has_flag(hand, LV_OBJ_FLAG_HIDDEN))
+            lv_obj_remove_flag(hand, LV_OBJ_FLAG_HIDDEN);
           // Seconds and microseconds from one gettimeofday() call, so the
           // hand never steps back at the turn of a second.
           struct timeval tv;
@@ -455,20 +461,20 @@ interval:
           const float ms = (tv.tv_sec % 60) * 1000 + tv.tv_usec / 1000;
           const float angle = ms * (2.0f * M_PI / 60000.0f);
           const float s = sinf(angle), c = cosf(angle);
-          const int32_t tip_x = lroundf(120 + 114 * s), tip_y = lroundf(120 - 114 * c);
-          const int32_t tail_x = lroundf(120 - 16 * s), tail_y = lroundf(120 + 16 * c);
+          const int32_t tip_x = lroundf(${centre} + ${secs_tip} * s), tip_y = lroundf(${centre} - ${secs_tip} * c);
+          const int32_t tail_x = lroundf(${centre} - ${secs_tail} * s), tail_y = lroundf(${centre} + ${secs_tail} * c);
           // Size the line object to the hand's bounding box, so each frame
           // redraws only the area around the old and new hand.
           const int32_t x0 = std::min(tip_x, tail_x), y0 = std::min(tip_y, tail_y);
           static lv_point_precise_t points[2];
-          if (lv_obj_get_x(id(secs_hand)->obj) == x0 && lv_obj_get_y(id(secs_hand)->obj) == y0 &&
+          if (lv_obj_get_x(hand) == x0 && lv_obj_get_y(hand) == y0 &&
               points[0].x == tip_x - x0 && points[0].y == tip_y - y0 &&
               points[1].x == tail_x - x0 && points[1].y == tail_y - y0)
             return;
           points[0] = {tip_x - x0, tip_y - y0};
           points[1] = {tail_x - x0, tail_y - y0};
-          lv_obj_set_pos(id(secs_hand)->obj, x0, y0);
-          lv_line_set_points(id(secs_hand)->obj, points, 2);
+          lv_obj_set_pos(hand, x0, y0);
+          lv_line_set_points(hand, points, 2);
 
 script:
   - id: update_minutes_hand
