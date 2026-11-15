@@ -58,6 +58,8 @@ sensor:
     pin_a: GPIO40
     pin_b: GPIO41
     on_clockwise:
+      - lvgl.widget.show: alarm_circle
+      - script.execute: hide_alarm_circle
       - lambda: |-
           auto alarm_time_var = id(alarm_time).state_as_esptime();
           alarm_time_var.minute += 15;
@@ -67,6 +69,8 @@ sensor:
           }
           id(alarm_time).make_call().set_time(alarm_time_var).perform();
     on_anticlockwise:
+      - lvgl.widget.show: alarm_circle
+      - script.execute: hide_alarm_circle
       - lambda: |-
           auto alarm_time_var = id(alarm_time).state_as_esptime();
           if (alarm_time_var.minute < 15) {
@@ -146,6 +150,28 @@ display:
     update_interval: never
     data_rate: 40MHz
 
+font:
+  - file:
+      type: gfonts
+      family: Roboto Condensed
+      weight: 500
+    id: minute_font
+    size: 24
+    glyphs: "0123456789"
+  - file:
+      type: gfonts
+      family: Roboto Condensed
+      weight: 500
+    id: hour_font
+    size: 15
+    glyphs: "0123456789"
+  - file:
+      type: gfonts
+      family: Noto Sans Symbols 2
+    id: triangle_font
+    size: 22
+    glyphs: "▲"
+
 lvgl:
   refresh_interval: 10ms
   style_definitions:
@@ -156,12 +182,153 @@ lvgl:
       bg_opa: TRANSP
       radius: 4
       pad_all: 2
+    - id: minute_numeral
+      text_font: minute_font
+      text_color: 0xE8DDBE
+      align: center
+    - id: hour_numeral
+      text_font: hour_font
+      text_color: 0xE8DDBE
+      align: center
   pages:
     - id: main_page
       height: 100%
       width: 100%
       bg_color: Black
       widgets:
+        # The Type B dial sits before the meter, so the meter's hands draw
+        # over it: minute numerals on the outer ring, a triangle at 12 and
+        # the hours inside an inner ring.
+        - label:
+            text_font: triangle_font
+            text_color: 0xE8DDBE
+            text: "▲"
+            align: center
+            y: -86
+        - label:
+            styles: minute_numeral
+            text: "5"
+            x: 43
+            y: -74
+        - label:
+            styles: minute_numeral
+            text: "10"
+            x: 74
+            y: -43
+        - label:
+            styles: minute_numeral
+            text: "15"
+            x: 86
+            y: 0
+        - label:
+            styles: minute_numeral
+            text: "20"
+            x: 74
+            y: 43
+        - label:
+            styles: minute_numeral
+            text: "25"
+            x: 43
+            y: 74
+        - label:
+            styles: minute_numeral
+            text: "30"
+            x: 0
+            y: 86
+        - label:
+            styles: minute_numeral
+            text: "35"
+            x: -43
+            y: 74
+        - label:
+            styles: minute_numeral
+            text: "40"
+            x: -74
+            y: 43
+        - label:
+            styles: minute_numeral
+            text: "45"
+            x: -86
+            y: 0
+        - label:
+            styles: minute_numeral
+            text: "50"
+            x: -74
+            y: -43
+        - label:
+            styles: minute_numeral
+            text: "55"
+            x: -43
+            y: -74
+        - obj:
+            width: 112
+            height: 112
+            align: CENTER
+            radius: 56
+            bg_opa: TRANSP
+            border_width: 2
+            border_color: 0xE8DDBE
+            pad_all: 0
+        - label:
+            styles: hour_numeral
+            text: "1"
+            x: 22
+            y: -38
+        - label:
+            styles: hour_numeral
+            text: "2"
+            x: 38
+            y: -22
+        - label:
+            styles: hour_numeral
+            text: "3"
+            x: 44
+            y: 0
+        - label:
+            styles: hour_numeral
+            text: "4"
+            x: 38
+            y: 22
+        - label:
+            styles: hour_numeral
+            text: "5"
+            x: 22
+            y: 38
+        - label:
+            styles: hour_numeral
+            text: "6"
+            x: 0
+            y: 44
+        - label:
+            styles: hour_numeral
+            text: "7"
+            x: -22
+            y: 38
+        - label:
+            styles: hour_numeral
+            text: "8"
+            x: -38
+            y: 22
+        - label:
+            styles: hour_numeral
+            text: "9"
+            x: -44
+            y: 0
+        - label:
+            styles: hour_numeral
+            text: "10"
+            x: -38
+            y: -22
+        - label:
+            styles: hour_numeral
+            text: "11"
+            x: -22
+            y: -38
+        - label:
+            styles: hour_numeral
+            text: "12"
+            x: 0
+            y: -44
         - meter:
             height: 100%
             width: 100%
@@ -178,8 +345,8 @@ lvgl:
                 ticks:
                   width: 1
                   count: 61
-                  length: 10
-                  color: White
+                  length: 7
+                  color: 0xE8DDBE
                 indicators:
                   - line:
                       id: minute_hand
@@ -188,20 +355,26 @@ lvgl:
                       rounded: true
                       length: -12
                       value: 0
-              - range_from: 1 # hours scale for labels
+              # Five-minute and quarter-hour ticks. Plain ticks, not major
+              # ticks, because major ticks bring scale labels with them.
+              - range_from: 0
                 range_to: 12
-                angle_range: 330
-                rotation: 300
+                angle_range: 360
+                rotation: 270
                 ticks:
-                  width: 1
-                  count: 12
-                  length: 1
-                  major:
-                    stride: 1
-                    width: 4
-                    length: 10
-                    color: White
-                    label_gap: 12
+                  width: 3
+                  count: 13
+                  length: 12
+                  color: 0xE8DDBE
+              - range_from: 0
+                range_to: 4
+                angle_range: 360
+                rotation: 270
+                ticks:
+                  width: 3
+                  count: 5
+                  length: 18
+                  color: 0xE8DDBE
               - range_from: 0 # hi-res hours scale for hand
                 range_to: 720
                 angle_range: 360
@@ -230,6 +403,8 @@ lvgl:
             line_color: Red
             line_rounded: true
         - obj:
+            id: alarm_circle
+            hidden: true
             width: 120
             height: 120
             align: CENTER
@@ -244,11 +419,6 @@ lvgl:
                   styles: date_style
                   id: alarm_label
                   y: -20
-                  text: ""
-              - label:
-                  id: date_label
-                  styles: date_style
-                  y: 20
                   text: ""
 
 interval:
@@ -296,15 +466,10 @@ script:
             static char alarm_buf[16];
             snprintf(alarm_buf, sizeof(alarm_buf), "Alarm %02d:%02d", alarm_time_var->hour, alarm_time_var->minute);
             return alarm_buf;
-      - lvgl.label.update:
-          id: date_label
-          text: !lambda |-
-            static const char * const day_names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-            static const char * const mon_names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-            static char date_buf[16];
-            auto now = id(rtctime).now();
-            if (!now.is_valid())
-              return "";
-            snprintf(date_buf, sizeof(date_buf), "%s, %s %2d", day_names[now.day_of_week - 1], mon_names[now.month - 1], now.day_of_month);
-            return date_buf;
+
+  # Hide the alarm circle three seconds after the last turn of the dial.
+  - id: hide_alarm_circle
+    mode: restart
+    then:
+      - delay: 3s
+      - lvgl.widget.hide: alarm_circle
