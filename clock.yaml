@@ -9,6 +9,10 @@ esphome:
 
 packages:
   core: !include debug.yaml
+  face: !include
+    file: face.yaml
+    vars:
+      time_id: rtctime
 
 esp32:
   variant: esp32s3
@@ -58,6 +62,8 @@ sensor:
     pin_a: GPIO40
     pin_b: GPIO41
     on_clockwise:
+      - lvgl.widget.show: alarm_circle
+      - script.execute: hide_alarm_circle
       - lambda: |-
           auto alarm_time_var = id(alarm_time).state_as_esptime();
           alarm_time_var.minute += 15;
@@ -67,6 +73,8 @@ sensor:
           }
           id(alarm_time).make_call().set_time(alarm_time_var).perform();
     on_anticlockwise:
+      - lvgl.widget.show: alarm_circle
+      - script.execute: hide_alarm_circle
       - lambda: |-
           auto alarm_time_var = id(alarm_time).state_as_esptime();
           if (alarm_time_var.minute < 15) {
@@ -144,144 +152,5 @@ display:
     invert_colors: true
     auto_clear_enabled: false
     update_interval: never
+    data_rate: 40MHz
 
-lvgl:
-  style_definitions:
-    - id: date_style # choose an ID for your definition
-      text_font: montserrat_14
-      align: center
-      text_color: White
-      bg_opa: TRANSP
-      radius: 4
-      pad_all: 2
-  pages:
-    - id: main_page
-      height: 100%
-      width: 100%
-      bg_color: Black
-      widgets:
-        - meter:
-            height: 100%
-            width: 100%
-            align: CENTER
-            bg_opa: TRANSP
-            border_width: 0
-            pad_all: 0
-            text_color: White
-            scales:
-              - range_from: 0 # minutes scale
-                range_to: 60
-                angle_range: 360
-                rotation: 270
-                ticks:
-                  width: 1
-                  count: 61
-                  length: 10
-                  color: White
-                indicators:
-                  - line:
-                      id: minute_hand
-                      width: 2
-                      color: White
-                      length: -25
-                      value: 0
-              - range_from: 1 # hours scale for labels
-                range_to: 12
-                angle_range: 330
-                rotation: 300
-                ticks:
-                  width: 1
-                  count: 12
-                  length: 1
-                  major:
-                    stride: 1
-                    width: 4
-                    length: 10
-                    color: White
-                    label_gap: 12
-              - range_from: 0 # hi-res hours scale for hand
-                range_to: 720
-                angle_range: 360
-                rotation: 270
-                ticks:
-                  count: 2
-                  width: 0
-                  length: 0
-                indicators:
-                  - line:
-                      id: hour_hand
-                      width: 4
-                      color: White
-                      length: -40
-                      value: 0
-                  - line:
-                      id: secs_hand
-                      width: 1
-                      color: Red
-                      length: -15
-                      value: 0
-        - obj:
-            width: 120
-            height: 120
-            align: CENTER
-            bg_color: Black
-            bg_opa: 85%
-            radius: 60
-            clip_corner: true
-            pad_all: 0
-            border_width: 1
-            widgets:
-              - label:
-                  styles: date_style
-                  id: alarm_label
-                  y: -20
-                  text: ""
-              - label:
-                  id: date_label
-                  styles: date_style
-                  y: 20
-                  text: ""
-
-interval:
-  - interval: 100ms
-    then:
-
-      - lvgl.indicator.update:
-          id: secs_hand
-          value: !lambda |-
-            auto now = id(rtctime).now();
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            return (now.second * 12) + (tv.tv_usec / 83330.0);
-
-script:
-  - id: update_minutes_hand
-    then:
-      - lvgl.indicator.update:
-          id: hour_hand
-          value: !lambda |-
-            auto now = id(rtctime).now();
-            return std::fmod(now.hour, 12) * 60 + now.minute;
-      - lvgl.indicator.update:
-          id: minute_hand
-          value: !lambda |-
-            return id(rtctime).now().minute;
-      - lvgl.label.update:
-          id: alarm_label
-          text: !lambda |-
-            auto alarm_time_var = id(alarm_time);
-            static char alarm_buf[16];
-            snprintf(alarm_buf, sizeof(alarm_buf), "Alarm %02d:%02d", alarm_time_var->hour, alarm_time_var->minute);
-            return alarm_buf;
-      - lvgl.label.update:
-          id: date_label
-          text: !lambda |-
-            static const char * const day_names[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-            static const char * const mon_names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-            static char date_buf[16];
-            auto now = id(rtctime).now();
-            if (!now.is_valid())
-              return "";
-            snprintf(date_buf, sizeof(date_buf), "%s, %s %2d", day_names[now.day_of_week - 1], mon_names[now.month - 1], now.day_of_month);
-            return date_buf;
