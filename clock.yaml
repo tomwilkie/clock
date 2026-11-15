@@ -402,6 +402,16 @@ lvgl:
             line_width: 2
             line_color: Red
             line_rounded: true
+        # Centre cap over the pivot, above the hands and below the alarm circle.
+        - obj:
+            width: 10
+            height: 10
+            align: CENTER
+            radius: 5
+            bg_color: Red
+            bg_opa: COVER
+            border_width: 0
+            pad_all: 0
         - obj:
             id: alarm_circle
             hidden: true
