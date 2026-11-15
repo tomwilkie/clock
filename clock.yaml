@@ -144,8 +144,10 @@ display:
     invert_colors: true
     auto_clear_enabled: false
     update_interval: never
+    data_rate: 40MHz
 
 lvgl:
+  refresh_interval: 10ms
   style_definitions:
     - id: date_style # choose an ID for your definition
       text_font: montserrat_14
@@ -181,9 +183,10 @@ lvgl:
                 indicators:
                   - line:
                       id: minute_hand
-                      width: 2
+                      width: 4
                       color: White
-                      length: -25
+                      rounded: true
+                      length: -12
                       value: 0
               - range_from: 1 # hours scale for labels
                 range_to: 12
@@ -210,16 +213,22 @@ lvgl:
                 indicators:
                   - line:
                       id: hour_hand
-                      width: 4
+                      width: 6
                       color: White
+                      rounded: true
                       length: -40
                       value: 0
-                  - line:
-                      id: secs_hand
-                      width: 1
-                      color: Red
-                      length: -15
-                      value: 0
+        # The second hand is a separate line widget, not a meter indicator,
+        # because indicator angles round to whole degrees. It sits after the
+        # meter and before the centre circle, so the circle draws on top.
+        - line:
+            id: secs_hand
+            points:
+              - 0, 0
+              - 0, 0
+            line_width: 2
+            line_color: Red
+            line_rounded: true
         - obj:
             width: 120
             height: 120
@@ -243,16 +252,30 @@ lvgl:
                   text: ""
 
 interval:
-  - interval: 100ms
+  - interval: 33ms
     then:
-
-      - lvgl.indicator.update:
-          id: secs_hand
-          value: !lambda |-
-            auto now = id(rtctime).now();
-            struct timeval tv;
-            gettimeofday(&tv, NULL);
-            return (now.second * 12) + (tv.tv_usec / 83330.0);
+      - lambda: |-
+          // Seconds and microseconds from one gettimeofday() call, so the
+          // hand never steps back at the turn of a second.
+          struct timeval tv;
+          gettimeofday(&tv, nullptr);
+          const float ms = (tv.tv_sec % 60) * 1000 + tv.tv_usec / 1000;
+          const float angle = ms * (2.0f * M_PI / 60000.0f);
+          const float s = sinf(angle), c = cosf(angle);
+          const int32_t tip_x = lroundf(120 + 114 * s), tip_y = lroundf(120 - 114 * c);
+          const int32_t tail_x = lroundf(120 - 16 * s), tail_y = lroundf(120 + 16 * c);
+          // Size the line object to the hand's bounding box, so each frame
+          // redraws only the area around the old and new hand.
+          const int32_t x0 = std::min(tip_x, tail_x), y0 = std::min(tip_y, tail_y);
+          static lv_point_precise_t points[2];
+          if (lv_obj_get_x(id(secs_hand)->obj) == x0 && lv_obj_get_y(id(secs_hand)->obj) == y0 &&
+              points[0].x == tip_x - x0 && points[0].y == tip_y - y0 &&
+              points[1].x == tail_x - x0 && points[1].y == tail_y - y0)
+            return;
+          points[0] = {tip_x - x0, tip_y - y0};
+          points[1] = {tail_x - x0, tail_y - y0};
+          lv_obj_set_pos(id(secs_hand)->obj, x0, y0);
+          lv_line_set_points(id(secs_hand)->obj, points, 2);
 
 script:
   - id: update_minutes_hand
