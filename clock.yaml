@@ -351,7 +351,7 @@ lvgl:
                   - line:
                       id: minute_hand
                       width: 4
-                      color: White
+                      color: 0xE8DDBE
                       rounded: true
                       length: -12
                       value: 0
@@ -387,9 +387,11 @@ lvgl:
                   - line:
                       id: hour_hand
                       width: 6
-                      color: White
+                      color: 0xE8DDBE
                       rounded: true
-                      length: -40
+                      # Tip 10 px inside the hour ring, as the minute hand's
+                      # tip is 10 px inside the edge of the dial.
+                      length: -71
                       value: 0
         # The second hand is a separate line widget, not a meter indicator,
         # because indicator angles round to whole degrees. It sits after the
@@ -404,11 +406,11 @@ lvgl:
             line_rounded: true
         # Centre cap over the pivot, above the hands and below the alarm circle.
         - obj:
-            width: 10
-            height: 10
+            width: 14
+            height: 14
             align: CENTER
-            radius: 5
-            bg_color: Red
+            radius: 7
+            bg_color: 0xE8DDBE
             bg_opa: COVER
             border_width: 0
             pad_all: 0
