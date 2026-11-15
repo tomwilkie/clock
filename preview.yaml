@@ -1,0 +1,53 @@
+# A host build of the clock face in an SDL window, for checking a change
+# without flashing the clock. It draws face.yaml, the same face as the
+# device, with the host's clock as the time source. See the readme.
+# It has no logger, because ESPHome's host logger doesn't compile on macOS.
+esphome:
+  name: clock-preview
+  includes:
+    - preview.h
+  on_boot:
+    then:
+      - script.execute: update_minutes_hand
+      - delay: 2s
+      - lambda: preview_save("face");
+      # Show the alarm circle as a turn of the dial would.
+      - lvgl.widget.show: alarm_circle
+      - script.execute: hide_alarm_circle
+      - delay: 500ms
+      - lambda: |-
+          preview_save("alarm");
+          preview_done();
+
+packages:
+  face: !include
+    file: face.yaml
+    vars:
+      time_id: host_time
+
+host:
+
+time:
+  - platform: host
+    id: host_time
+    timezone: Europe/London
+    on_time:
+      - minutes: "*"
+        then:
+          - script.execute: update_minutes_hand
+
+datetime:
+  - platform: template
+    id: alarm_time
+    type: time
+    initial_value: "07:00:00"
+    optimistic: yes
+
+display:
+  - platform: sdl
+    id: round_display
+    auto_clear_enabled: false
+    update_interval: never
+    dimensions:
+      width: 240
+      height: 240

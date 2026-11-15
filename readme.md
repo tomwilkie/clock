@@ -30,3 +30,18 @@ $ ~/.local/bin/esphome run --device=/dev/tty.usbmodem31301 clock.yaml
 # Install the clock (subsequent times, via WiFi)
 $ ~/.local/bin/esphome run clock.yaml
 ```
+
+# Previewing the clock face
+`face.yaml` holds the clock face. `clock.yaml` builds it for the M5Stack Dial, and `preview.yaml` builds the same face for your computer in a 240 x 240 window, using your computer's clock. Two seconds after it starts, the preview shows the alarm circle as a turn of the dial would.
+
+```sh
+# The preview needs SDL2
+$ brew install sdl2
+
+# Open the face in a window
+$ ~/.local/bin/esphome run preview.yaml
+
+# Or save screenshots of the face and the alarm circle as face.bmp and alarm.bmp, then exit
+$ ~/.local/bin/esphome compile preview.yaml
+$ CLOCK_PREVIEW_OUT=/tmp ./.esphome/build/clock-preview/.pioenvs/clock-preview/program
+```

@@ -1,0 +1,359 @@
+# The clock face: the dial, the hands and the alarm circle. clock.yaml
+# includes it on the M5Stack Dial, and preview.yaml includes it on the host
+# with an SDL window, so both draw the same face.
+#
+# The including config must provide a time source with the ID passed in as
+# the time_id var, a datetime with ID alarm_time, and a display.
+
+substitutions:
+  # The hour ring and the alarm circle share one diameter.
+  ring_size: "124"
+  # Second hand geometry, in pixels on the 240 x 240 display.
+  centre: "120"
+  secs_tip: "114"
+  secs_tail: "16"
+
+color:
+  # The off-white lume of the dial's numerals, ticks, rings and hands.
+  - id: lume
+    hex: E8DDBE
+
+font:
+  - file: fonts/RobotoCondensed-Medium.ttf
+    id: minute_font
+    bpp: 4
+    size: 21
+    glyphs: "0123456789:Alarm"
+  - file: fonts/RobotoCondensed-Medium.ttf
+    id: hour_font
+    bpp: 4
+    size: 15
+    glyphs: "0123456789"
+  - file: fonts/NotoSansSymbols2-Triangle.ttf
+    id: triangle_font
+    bpp: 4
+    size: 22
+    glyphs: "▲"
+
+lvgl:
+  refresh_interval: 10ms
+  style_definitions:
+    - id: alarm_style
+      text_font: minute_font
+      text_color: lume
+      text_align: center
+      align: center
+    - id: minute_numeral
+      text_font: minute_font
+      text_color: lume
+      align: center
+    - id: hour_numeral
+      text_font: hour_font
+      text_color: lume
+      align: center
+  pages:
+    - id: main_page
+      height: 100%
+      width: 100%
+      bg_color: Black
+      widgets:
+        # The Type B dial sits before the meter, so the meter's hands draw
+        # over it: minute numerals on the outer ring, a triangle at 12 and
+        # the hours inside an inner ring. The numeral positions are worked
+        # out at 30 degree steps, 86 px from the centre for the minutes and
+        # 48 px for the hours: x = r * sin(a), y = -r * cos(a), rounded.
+        - label:
+            text_font: triangle_font
+            text_color: lume
+            text: "▲"
+            align: center
+            y: -86
+        - label:
+            styles: minute_numeral
+            text: "5"
+            x: 43
+            y: -74
+        - label:
+            styles: minute_numeral
+            text: "10"
+            x: 74
+            y: -43
+        - label:
+            styles: minute_numeral
+            text: "15"
+            x: 86
+            y: 0
+        - label:
+            styles: minute_numeral
+            text: "20"
+            x: 74
+            y: 43
+        - label:
+            styles: minute_numeral
+            text: "25"
+            x: 43
+            y: 74
+        - label:
+            styles: minute_numeral
+            text: "30"
+            x: 0
+            y: 86
+        - label:
+            styles: minute_numeral
+            text: "35"
+            x: -43
+            y: 74
+        - label:
+            styles: minute_numeral
+            text: "40"
+            x: -74
+            y: 43
+        - label:
+            styles: minute_numeral
+            text: "45"
+            x: -86
+            y: 0
+        - label:
+            styles: minute_numeral
+            text: "50"
+            x: -74
+            y: -43
+        - label:
+            styles: minute_numeral
+            text: "55"
+            x: -43
+            y: -74
+        - obj:
+            width: ${ring_size}
+            height: ${ring_size}
+            align: CENTER
+            radius: circle
+            bg_opa: TRANSP
+            border_width: 2
+            border_color: lume
+            pad_all: 0
+        - label:
+            styles: hour_numeral
+            text: "1"
+            x: 24
+            y: -42
+        - label:
+            styles: hour_numeral
+            text: "2"
+            x: 42
+            y: -24
+        - label:
+            styles: hour_numeral
+            text: "3"
+            x: 48
+            y: 0
+        - label:
+            styles: hour_numeral
+            text: "4"
+            x: 42
+            y: 24
+        - label:
+            styles: hour_numeral
+            text: "5"
+            x: 24
+            y: 42
+        - label:
+            styles: hour_numeral
+            text: "6"
+            x: 0
+            y: 48
+        - label:
+            styles: hour_numeral
+            text: "7"
+            x: -24
+            y: 42
+        - label:
+            styles: hour_numeral
+            text: "8"
+            x: -42
+            y: 24
+        - label:
+            styles: hour_numeral
+            text: "9"
+            x: -48
+            y: 0
+        - label:
+            styles: hour_numeral
+            text: "10"
+            x: -42
+            y: -24
+        - label:
+            styles: hour_numeral
+            text: "11"
+            x: -24
+            y: -42
+        - label:
+            styles: hour_numeral
+            text: "12"
+            x: 0
+            y: -48
+        - meter:
+            height: 100%
+            width: 100%
+            align: CENTER
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            text_color: White
+            scales:
+              - range_from: 0 # minutes scale
+                range_to: 60
+                angle_range: 360
+                rotation: 270
+                ticks:
+                  width: 1
+                  count: 61
+                  length: 7
+                  color: lume
+                indicators:
+                  - line:
+                      id: minute_hand
+                      width: 4
+                      color: lume
+                      rounded: true
+                      length: -12
+                      value: 0
+              # Five-minute and quarter-hour ticks. Plain ticks, not major
+              # ticks, because major ticks bring scale labels with them.
+              - range_from: 0
+                range_to: 12
+                angle_range: 360
+                rotation: 270
+                ticks:
+                  width: 3
+                  count: 13
+                  length: 12
+                  color: lume
+              - range_from: 0
+                range_to: 4
+                angle_range: 360
+                rotation: 270
+                ticks:
+                  width: 3
+                  count: 5
+                  length: 18
+                  color: lume
+              - range_from: 0 # hi-res hours scale for hand
+                range_to: 720
+                angle_range: 360
+                rotation: 270
+                ticks:
+                  count: 2
+                  width: 0
+                  length: 0
+                indicators:
+                  - line:
+                      id: hour_hand
+                      width: 6
+                      color: lume
+                      rounded: true
+                      # Tip 10 px inside the hour ring, as the minute hand's
+                      # tip is 10 px inside the edge of the dial.
+                      length: -71
+                      value: 0
+        # The second hand is a separate line widget, not a meter indicator,
+        # because indicator angles round to whole degrees. It sits after the
+        # meter and before the centre cap and the alarm circle, which draw
+        # on top. It stays hidden until the clock has a valid time.
+        - line:
+            id: secs_hand
+            hidden: true
+            points:
+              - 0, 0
+              - 0, 0
+            line_width: 2
+            line_color: Red
+            line_rounded: true
+        # Centre cap over the pivot, above the hands and below the alarm circle.
+        - obj:
+            width: 14
+            height: 14
+            align: CENTER
+            radius: 7
+            bg_color: lume
+            bg_opa: COVER
+            border_width: 0
+            pad_all: 0
+        - obj:
+            id: alarm_circle
+            hidden: true
+            width: ${ring_size}
+            height: ${ring_size}
+            align: CENTER
+            bg_color: Black
+            bg_opa: 85%
+            radius: circle
+            clip_corner: true
+            pad_all: 0
+            border_width: 2
+            border_color: lume
+            widgets:
+              - label:
+                  styles: alarm_style
+                  id: alarm_label
+                  text: ""
+
+interval:
+  - interval: 33ms
+    then:
+      - lambda: |-
+          lv_obj_t *hand = id(secs_hand)->obj;
+          if (!id(${time_id}).now().is_valid()) {
+            lv_obj_add_flag(hand, LV_OBJ_FLAG_HIDDEN);
+            return;
+          }
+          if (lv_obj_has_flag(hand, LV_OBJ_FLAG_HIDDEN))
+            lv_obj_remove_flag(hand, LV_OBJ_FLAG_HIDDEN);
+          // Seconds and microseconds from one gettimeofday() call, so the
+          // hand never steps back at the turn of a second.
+          struct timeval tv;
+          gettimeofday(&tv, nullptr);
+          const float ms = (tv.tv_sec % 60) * 1000 + tv.tv_usec / 1000;
+          const float angle = ms * (2.0f * M_PI / 60000.0f);
+          const float s = sinf(angle), c = cosf(angle);
+          const int32_t tip_x = lroundf(${centre} + ${secs_tip} * s), tip_y = lroundf(${centre} - ${secs_tip} * c);
+          const int32_t tail_x = lroundf(${centre} - ${secs_tail} * s), tail_y = lroundf(${centre} + ${secs_tail} * c);
+          // Size the line object to the hand's bounding box, so each frame
+          // redraws only the area around the old and new hand.
+          const int32_t x0 = std::min(tip_x, tail_x), y0 = std::min(tip_y, tail_y);
+          static lv_point_precise_t points[2];
+          if (lv_obj_get_x(hand) == x0 && lv_obj_get_y(hand) == y0 &&
+              points[0].x == tip_x - x0 && points[0].y == tip_y - y0 &&
+              points[1].x == tail_x - x0 && points[1].y == tail_y - y0)
+            return;
+          points[0] = {tip_x - x0, tip_y - y0};
+          points[1] = {tail_x - x0, tail_y - y0};
+          lv_obj_set_pos(hand, x0, y0);
+          lv_line_set_points(hand, points, 2);
+
+script:
+  - id: update_minutes_hand
+    then:
+      - lvgl.indicator.update:
+          id: hour_hand
+          value: !lambda |-
+            auto now = id(${time_id}).now();
+            return std::fmod(now.hour, 12) * 60 + now.minute;
+      - lvgl.indicator.update:
+          id: minute_hand
+          value: !lambda |-
+            return id(${time_id}).now().minute;
+      - lvgl.label.update:
+          id: alarm_label
+          text: !lambda |-
+            auto alarm_time_var = id(alarm_time);
+            static char alarm_buf[16];
+            snprintf(alarm_buf, sizeof(alarm_buf), "Alarm\n%02d:%02d", alarm_time_var->hour, alarm_time_var->minute);
+            return alarm_buf;
+
+  # Hide the alarm circle three seconds after the last turn of the dial.
+  - id: hide_alarm_circle
+    mode: restart
+    then:
+      - delay: 3s
+      - lvgl.widget.hide: alarm_circle
