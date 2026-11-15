@@ -150,6 +150,11 @@ display:
     update_interval: never
     data_rate: 40MHz
 
+color:
+  # The off-white lume of the dial's numerals, ticks, rings and hands.
+  - id: lume
+    hex: E8DDBE
+
 font:
   - file:
       type: gfonts
@@ -187,11 +192,11 @@ lvgl:
       pad_all: 2
     - id: minute_numeral
       text_font: minute_font
-      text_color: 0xE8DDBE
+      text_color: lume
       align: center
     - id: hour_numeral
       text_font: hour_font
-      text_color: 0xE8DDBE
+      text_color: lume
       align: center
   pages:
     - id: main_page
@@ -204,7 +209,7 @@ lvgl:
         # the hours inside an inner ring.
         - label:
             text_font: triangle_font
-            text_color: 0xE8DDBE
+            text_color: lume
             text: "▲"
             align: center
             y: -86
@@ -270,7 +275,7 @@ lvgl:
             radius: 62
             bg_opa: TRANSP
             border_width: 2
-            border_color: 0xE8DDBE
+            border_color: lume
             pad_all: 0
         - label:
             styles: hour_numeral
@@ -349,12 +354,12 @@ lvgl:
                   width: 1
                   count: 61
                   length: 7
-                  color: 0xE8DDBE
+                  color: lume
                 indicators:
                   - line:
                       id: minute_hand
                       width: 4
-                      color: 0xE8DDBE
+                      color: lume
                       rounded: true
                       length: -12
                       value: 0
@@ -368,7 +373,7 @@ lvgl:
                   width: 3
                   count: 13
                   length: 12
-                  color: 0xE8DDBE
+                  color: lume
               - range_from: 0
                 range_to: 4
                 angle_range: 360
@@ -377,7 +382,7 @@ lvgl:
                   width: 3
                   count: 5
                   length: 18
-                  color: 0xE8DDBE
+                  color: lume
               - range_from: 0 # hi-res hours scale for hand
                 range_to: 720
                 angle_range: 360
@@ -390,7 +395,7 @@ lvgl:
                   - line:
                       id: hour_hand
                       width: 6
-                      color: 0xE8DDBE
+                      color: lume
                       rounded: true
                       # Tip 10 px inside the hour ring, as the minute hand's
                       # tip is 10 px inside the edge of the dial.
@@ -413,7 +418,7 @@ lvgl:
             height: 14
             align: CENTER
             radius: 7
-            bg_color: 0xE8DDBE
+            bg_color: lume
             bg_opa: COVER
             border_width: 0
             pad_all: 0
@@ -429,13 +434,13 @@ lvgl:
             clip_corner: true
             pad_all: 0
             border_width: 2
-            border_color: 0xE8DDBE
+            border_color: lume
             widgets:
               - label:
                   styles: date_style
                   id: alarm_label
                   text_font: minute_font
-                  text_color: 0xE8DDBE
+                  text_color: lume
                   text_align: center
                   text: ""
 
