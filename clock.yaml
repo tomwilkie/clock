@@ -156,6 +156,7 @@ font:
       family: Roboto Condensed
       weight: 500
     id: minute_font
+    bpp: 4
     size: 21
     glyphs: "0123456789:Alarm"
   - file:
@@ -163,6 +164,7 @@ font:
       family: Roboto Condensed
       weight: 500
     id: hour_font
+    bpp: 4
     size: 15
     glyphs: "0123456789"
   - file:
