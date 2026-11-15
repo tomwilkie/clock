@@ -171,6 +171,7 @@ font:
       type: gfonts
       family: Noto Sans Symbols 2
     id: triangle_font
+    bpp: 4
     size: 22
     glyphs: "▲"
 
